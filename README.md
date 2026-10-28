@@ -1,25 +1,18 @@
 <div align="center">
 
 ```text
-╔══════════════════════════════════════════════════════════════════════════╗
-║                                                                          ║
-║                    ██╗██╗   ██╗███╗   ██╗████████╗ █████╗                ║
-║                    ██║██║   ██║████╗  ██║╚══██╔══╝██╔══██╗               ║
-║                    ██║██║   ██║██╔██╗ ██║   ██║   ███████║               ║
-║               ██   ██║██║   ██║██║╚██╗██║   ██║   ██╔══██║               ║
-║               ╚█████╔╝╚██████╔╝██║ ╚████║   ██║   ██║  ██║               ║
-║                ╚════╝  ╚═════╝ ╚═╝  ╚═══╝   ╚═╝   ╚═╝  ╚═╝               ║
-║                                                                          ║
-║   ████████╗ █████╗ ██╗  ██╗ █████╗ ██╗  ██╗ █████╗ ███████╗██╗  ██╗██╗   ║
-║   ╚══██╔══╝██╔══██╗██║ ██╔╝██╔══██╗██║  ██║██╔══██╗██╔════╝██║  ██║██║   ║
-║      ██║   ███████║█████╔╝ ███████║███████║███████║███████╗███████║██║   ║
-║      ██║   ██╔══██║██╔═██╗ ██╔══██║██╔══██║██╔══██║╚════██║██╔══██║██║   ║
-║      ██║   ██║  ██║██║  ██╗██║  ██║██║  ██║██║  ██║███████║██║  ██║██║   ║
-║      ╚═╝   ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝╚══════╝╚═╝  ╚═╝╚═╝   ║
-║                                                                          ║
-║                  AI Agent Architect / Software Engineer                  ║
-║                                                                          ║
-╚══════════════════════════════════════════════════════════════════════════╝
+╔═══════════════════════════════════════════════════════════════════════════════════╗
+║                                                                                   ║
+║   ████████╗ █████╗ ██╗  ██╗ █████╗      ██╗██╗   ██╗███╗   ██╗ ██████╗ ██████╗    ║
+║   ╚══██╔══╝██╔══██╗██║ ██╔╝██╔══██╗     ██║██║   ██║████╗  ██║██╔═████╗╚════██╗   ║
+║      ██║   ███████║█████╔╝ ███████║     ██║██║   ██║██╔██╗ ██║██║██╔██║ █████╔╝   ║
+║      ██║   ██╔══██║██╔═██╗ ██╔══██║██   ██║██║   ██║██║╚██╗██║████╔╝██║██╔═══╝    ║
+║      ██║   ██║  ██║██║  ██╗██║  ██║╚█████╔╝╚██████╔╝██║ ╚████║╚██████╔╝███████╗   ║
+║      ╚═╝   ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝ ╚════╝  ╚═════╝ ╚═╝  ╚═══╝ ╚═════╝ ╚══════╝   ║
+║                                                                                   ║
+║                      AI Agent Architect / Software Engineer                       ║
+║                                                                                   ║
+╚═══════════════════════════════════════════════════════════════════════════════════╝
 ```
 
 <picture>
@@ -32,24 +25,10 @@
 
 ### 👋 About Me
 
-I'm Junta, a graduate student at **Akita Prefectural University** and a software engineer focused on **LLMs, AI agents, and RAG**.<br>
-I build AI-powered applications end to end, from agent loops and retrieval pipelines to the APIs and UIs around them.<br>
-Professionally, I've worked on developing AI agents built on RAG.<br>
-Most of my recent work is on agent architecture: tool calling, sub-agents, context management, and human-in-the-loop.
-
-### 🚀 Featured Projects
-
-**[Cairn](https://github.com/TakaJun02/Cairn)** — conversational trip planner for the Mt. Chokai area<br>
-A ReAct main agent delegates to specialized sub-agents for spot recommendation, itinerary planning over real road and trail routes, and knowledge search, and asks the traveler for missing details along the way.<br>
-`Python` `FastAPI` `Vue 3` `PostgreSQL` `pgvector` `OSRM` `vLLM`
-
-**[Sarutahiko](https://github.com/TakaJun02/sarutahiko)** — campus guide agent for Akita Prefectural University's open campus<br>
-A LangGraph ReAct loop chooses between vector search, keyword search, full-document retrieval, and web search, and hands campus directions off to a routing sub-agent.<br>
-`LangGraph` `FastAPI` `Vue 3` `Qdrant` `Tavily` `PWA`
-
-**[Hukidashi](https://github.com/TakaJun02/hukidashi)** — comic reader with LLM comment rephrasing<br>
-Readers pin comments anywhere on a manga page, and an LLM rewrites harsh wording into a gentler tone before others see it, so the criticism stays but the sting goes.<br>
-`FastAPI` `Vue 3` `SQLite` `vLLM`
+- 🎓 Graduate student at **Akita Prefectural University**
+- 🤖 Software engineer focused on **LLMs, AI agents, and RAG**
+- 💼 Hands-on industry experience building **RAG-powered AI agents**
+- 🧩 Exploring agent architecture: tool calling, sub-agents, context management, human-in-the-loop
 
 ### 🧰 Tech Stack
 
@@ -93,9 +72,36 @@ Readers pin comments anywhere on a manga page, and an LLM rewrites harsh wording
 ![GitHub](https://img.shields.io/badge/github-%23121011.svg?style=for-the-badge&logo=github&logoColor=white)
 ![Linux](https://img.shields.io/badge/linux-FCC624?style=for-the-badge&logo=linux&logoColor=black)
 ![Claude Code](https://img.shields.io/badge/claude%20code-%23D97757.svg?style=for-the-badge&logo=claudecode&logoColor=white)
+![Codex](https://img.shields.io/badge/codex-%23000000.svg?style=for-the-badge)
 <br/>
+
+### ⚡ Activity
+
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/TakaJun02/TakaJun02/output/snake-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/TakaJun02/TakaJun02/output/snake-light.svg">
+  <img src="https://raw.githubusercontent.com/TakaJun02/TakaJun02/output/snake-light.svg" alt="A snake eating my GitHub contribution graph">
+</picture>
+
+<!-- activity:start -->
+```text
+> /activity
+
+● Contributions(past year)
+  ⎿  187 contributions on 56 active days
+● Streak()
+  ⎿  current 1 day · longest 5 days
+● Rhythm()
+  ⎿  busiest on Thursdays · best day Oct 9 with 12
+● Languages(public repos)
+  ⎿  Python 70% · Vue 13% · JavaScript 13% · CSS 4%
+
+✻ Pondering… (esc to interrupt)
+```
+<!-- activity:end -->
 
 ### 🔗 Connect
 
 [![GitHub](https://img.shields.io/badge/GitHub-TakaJun02-D97757?style=for-the-badge&logo=github&logoColor=white&labelColor=262624)](https://github.com/TakaJun02)
+[![X](https://img.shields.io/badge/X-%40JuntaTakahashi0-D97757?style=for-the-badge&logo=x&logoColor=white&labelColor=262624)](https://x.com/JuntaTakahashi0)
 [![Portfolio](https://img.shields.io/badge/Portfolio-takajun02.com-D97757?style=for-the-badge&labelColor=262624)](https://takajun02.com/)
