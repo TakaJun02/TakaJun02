@@ -46,7 +46,7 @@ FACES = {
 }
 LINES = {
     "overclocked": ["{streak}-day streak! Spawned {subs}.", "{streak} days in a row. My context is on fire."],
-    "happy": ["Shipped today. Streak: {streak_days}.", "{today} today. Embedding them now.", "Fresh commits today. Nom nom."],
+    "happy": ["Shipped today. Streak: {streak_days}.", "{today} today. Into the vector store it goes.", "Fresh commits today. Nom nom."],
     "idle": ["No commits since {last}. Feed me a diff?", "Idle since {last}. Polling for pushes..."],
     "sleepy": ["zZ... wake me up when a PR lands.", "{idle} days quiet. Entering low-power mode."],
     "hibernating": ["{idle} days without commits. Hibernating.", "Context compacted. Waiting for commits."],
