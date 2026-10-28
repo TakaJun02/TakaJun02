@@ -92,26 +92,17 @@ esc             interrupt (please don't)
 
 ### ⚡ Activity
 
-<!-- activity:start -->
-```text
-> /activity
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/TakaJun02/TakaJun02/output/snake-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/TakaJun02/TakaJun02/output/snake-light.svg">
+  <img src="https://raw.githubusercontent.com/TakaJun02/TakaJun02/output/snake-light.svg" width="100%" alt="A snake eating my GitHub contribution graph">
+</picture>
 
-   ┌─────────┐   ╭──────────────────────────────────────────────────────╮
-   │  ^   ^  │ ──┤ 1 contribution today. Into the vector store it goes. │
-   │   \_/   │   ╰──────────────────────────────────────────────────────╯
-   └──┬───┬──┘   [^_^]
-      TJ-02
-
-● Contributions(past year)
-  ⎿  187 contributions · 57 active days · best streak 5 days
-● Context(2026)
-  ⎿  ████████████████░░░░ 82% used · auto-compact on Jan 1
-● Omikuji(today)
-  ⎿  中吉 — a sub-agent finds the missing doc
-
-✻ Reflecting… (esc to interrupt)
-```
-<!-- activity:end -->
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/TakaJun02/TakaJun02/output/activity-dark.svg">
+  <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/TakaJun02/TakaJun02/output/activity-light.svg">
+  <img src="https://raw.githubusercontent.com/TakaJun02/TakaJun02/output/activity-light.svg" width="100%" alt="An animated Claude Code-style session where TJ-02, a small agent whose mood follows my contributions, reports today's activity, the year as a context window, and an omikuji">
+</picture>
 
 ### 🔗 Connect
 
