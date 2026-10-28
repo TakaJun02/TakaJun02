@@ -96,20 +96,20 @@ esc             interrupt (please don't)
 ```text
 > /activity
 
-   ┌─────────┐   ╭───────────────────────────────╮
-   │  ^   ^  │ ──┤ Shipped today. Streak: 1 day. │
-   │   \_/   │   ╰───────────────────────────────╯
-   └──┬───┬──┘
+   ┌─────────┐   ╭───────────────────────────────────────────╮
+   │  ^   ^  │ ──┤ 1 contribution today. Embedding them now. │
+   │   \_/   │   ╰───────────────────────────────────────────╯
+   └──┬───┬──┘   [^_^]
       TJ-02
 
 ● Contributions(past year)
-  ⎿  187 contributions · 56 active days · best streak 5 days
+  ⎿  187 contributions · 57 active days · best streak 5 days
 ● Context(2026)
-  ⎿  █████████████████░░░ 83% used · auto-compact on Jan 1
+  ⎿  ████████████████░░░░ 82% used · auto-compact on Jan 1
 ● Omikuji(today)
-  ⎿  末吉 — the LLM is confident and mostly right
+  ⎿  中吉 — a sub-agent finds the missing doc
 
-✻ Orchestrating… (esc to interrupt)
+✻ Reflecting… (esc to interrupt)
 ```
 <!-- activity:end -->
 
