@@ -4,19 +4,22 @@
     python3 scripts/build_typing.py
 
 Writes assets/typing-dark.svg and assets/typing-light.svg (standard library only).
-Edit PHRASES or the timing constants below and re-run to update the animation.
+Edit SCRIPTS or the timing constants below and re-run to update the animation.
 
 How it works
-- Each phrase sits under a clipPath whose width steps one character cell at a
-  time (SMIL, calcMode="discrete"), so it types in, holds, and deletes itself.
-  textLength pins every glyph to the same cell width, so the steps line up
-  with whichever monospace font the viewer happens to have.
+- Each distinct line of text sits under a clipPath whose width steps one
+  character cell at a time (SMIL, calcMode="discrete"), so it types in, holds,
+  and deletes itself. textLength pins every glyph to the same cell width, so
+  the steps line up with whichever monospace font the viewer happens to have.
+- A typo is a detour: the line is typed towards a wrong target, backspaced to
+  the shared prefix, and continued on the correct line's layer.
 - A block cursor follows the text and blinks while the line is idle.
 - prefers-reduced-motion hides the animated layer and shows a static line.
 """
 
 from __future__ import annotations
 
+import os
 import random
 from pathlib import Path
 from xml.sax.saxutils import escape
@@ -24,11 +27,15 @@ from xml.sax.saxutils import escape
 ROOT = Path(__file__).resolve().parent.parent
 OUT_DIR = ROOT / "assets"
 
-PHRASES = [
-    "Building AI Agents with LLMs",
-    "Engineering RAG Systems",
-    "Turning AI into Practical Solutions",
+# One entry per phrase: the line is typed or backspaced from one target to the
+# next, and the last target is what the phrase finally reads.
+SCRIPTS = [
+    ["Building AI Agnets", "Building AI Ag", "Building AI Agents with LLMs"],
+    ["Engineering RAG Systems"],
+    ["Turning AI into Practical Solutions"],
+    ["Convincing my agent the task is done"],
 ]
+PHRASES = [script[-1] for script in SCRIPTS]
 
 # Warm, Claude Code-like palettes. The background stays transparent so the
 # line sits directly on GitHub's page colour in either theme.
@@ -46,7 +53,7 @@ MONO = (
 W, H = 640, 44
 FONT = 20.0
 CELL = FONT * 0.6                   # monospace advance
-LONGEST = max(len(p) for p in PHRASES)
+LONGEST = max(len(t) for script in SCRIPTS for t in script)
 PROMPT_X = (W - (2 + LONGEST + 1) * CELL) / 2
 TEXT_X = PROMPT_X + 2 * CELL
 BASELINE = 29.0
@@ -56,6 +63,8 @@ PAUSE_BEFORE = 0.6
 HOLD = 1.9
 TYPE_MIN, TYPE_MAX = 0.055, 0.105
 TYPE_AFTER_SPACE = 0.04
+NOTICE_TYPO = 0.45
+BACKSPACE = 0.07
 DELETE = 0.028
 BLINK = 0.53
 
@@ -65,30 +74,45 @@ def num(v: float) -> str:
     return s if s not in ("", "-0") else "0"
 
 
-def timeline() -> tuple[list[tuple[float, int, int, bool]], float]:
-    """Frames of (time, phrase index, visible chars, cursor visible)."""
+def sources(script: list[str]) -> list[str]:
+    """Targets that are not just a prefix of another target: one text layer each."""
+    return [t for t in script if not any(o != t and o.startswith(t) for o in script)]
+
+
+def timeline() -> tuple[list[tuple[float, int, str, bool]], float]:
+    """Frames of (time, script index, visible text, cursor visible)."""
     rng = random.Random(2)  # fixed seed: the same "human" rhythm on every build
-    frames: list[tuple[float, int, int, bool]] = []
+    frames: list[tuple[float, int, str, bool]] = []
     t = 0.0
 
-    def idle(duration: float, i: int, n: int) -> None:
+    def idle(duration: float, i: int, text: str, blink: bool = True) -> None:
         nonlocal t
         end, on = t + duration, True
         while t < end - 1e-9:
-            frames.append((t, i, n, on))
-            t = min(t + BLINK, end)
+            frames.append((t, i, text, on))
+            t = min(t + (BLINK if blink else duration), end)
             on = not on
 
-    for i, phrase in enumerate(PHRASES):
-        idle(PAUSE_BEFORE, i, 0)
-        for k in range(1, len(phrase) + 1):
-            frames.append((t, i, k, True))
-            t += rng.uniform(TYPE_MIN, TYPE_MAX)
-            if phrase[k - 1] == " ":
-                t += TYPE_AFTER_SPACE
-        idle(HOLD, i, len(phrase))
-        for k in range(len(phrase) - 1, -1, -1):
-            frames.append((t, i, k, True))
+    for i, script in enumerate(SCRIPTS):
+        idle(PAUSE_BEFORE, i, "")
+        line = ""
+        for target in script:
+            keep = os.path.commonprefix([line, target])
+            if len(line) > len(keep):  # spotted a typo: pause, then backspace
+                idle(NOTICE_TYPO, i, line, blink=False)
+                for k in range(len(line) - 1, len(keep) - 1, -1):
+                    frames.append((t, i, line[:k], True))
+                    t += BACKSPACE
+                line = keep
+            for k in range(len(line) + 1, len(target) + 1):
+                frames.append((t, i, target[:k], True))
+                t += rng.uniform(TYPE_MIN, TYPE_MAX)
+                if target[k - 1] == " ":
+                    t += TYPE_AFTER_SPACE
+            line = target
+        idle(HOLD, i, line)
+        for k in range(len(line) - 1, -1, -1):
+            frames.append((t, i, line[:k], True))
             t += DELETE
     return frames, t
 
@@ -113,23 +137,29 @@ def build(name: str, theme: dict) -> str:
     cursor_y = BASELINE - FONT * 0.8
     cursor_h = FONT * 1.05
 
-    def text(phrase: str) -> str:
+    def text(line: str) -> str:
         return (
-            f'<text x="{num(TEXT_X)}" y="{num(BASELINE)}" textLength="{num(len(phrase) * CELL)}" '
-            f'lengthAdjust="spacing">{escape(phrase)}</text>'
+            f'<text x="{num(TEXT_X)}" y="{num(BASELINE)}" textLength="{num(len(line) * CELL)}" '
+            f'lengthAdjust="spacing">{escape(line)}</text>'
         )
 
-    clips, layers = [], []
-    for i, phrase in enumerate(PHRASES):
-        widths = [(t, num(n * CELL if p == i else 0)) for t, p, n, _ in frames]
+    layers = [(i, src) for i, script in enumerate(SCRIPTS) for src in sources(script)]
+
+    def layer_of(i: int, visible: str) -> int:
+        return next(n for n, (j, src) in enumerate(layers) if j == i and src.startswith(visible))
+
+    active = [(t, layer_of(i, v), len(v), on) for t, i, v, on in frames]
+    clips, groups = [], []
+    for n, (_, src) in enumerate(layers):
+        widths = [(t, num(k * CELL if layer == n else 0)) for t, layer, k, _ in active]
         clips.append(
-            f'<clipPath id="type-{i}"><rect x="{num(TEXT_X)}" y="0" width="0" height="{H}">'
+            f'<clipPath id="type-{n}"><rect x="{num(TEXT_X)}" y="0" width="0" height="{H}">'
             f'{discrete("width", widths, dur)}</rect></clipPath>'
         )
-        layers.append(f'<g clip-path="url(#type-{i})">{text(phrase)}</g>')
+        groups.append(f'<g clip-path="url(#type-{n})">{text(src)}</g>')
 
-    cursor_x = [(t, num(TEXT_X + n * CELL)) for t, _, n, _ in frames]
-    cursor_on = [(t, "1" if on else "0") for t, _, _, on in frames]
+    cursor_x = [(t, num(TEXT_X + k * CELL)) for t, _, k, _ in active]
+    cursor_on = [(t, "1" if on else "0") for t, _, _, on in active]
     cursor = (
         f'<rect x="{num(TEXT_X)}" y="{num(cursor_y)}" width="{num(CELL - 1.5)}" height="{num(cursor_h)}">'
         f'{discrete("x", cursor_x, dur)}{discrete("opacity", cursor_on, dur)}</rect>'
@@ -160,7 +190,7 @@ def build(name: str, theme: dict) -> str:
   <text x="{num(PROMPT_X)}" y="{num(BASELINE)}" font-size="{num(FONT)}" fill="{theme["accent"]}">&gt;</text>
   <g font-size="{num(FONT)}" fill="{theme["text"]}">
     <g class="motion">
-    {nl.join(layers)}
+    {nl.join(groups)}
     {cursor}
     </g>
     {static}

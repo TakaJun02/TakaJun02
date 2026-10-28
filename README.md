@@ -18,8 +18,23 @@
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="./assets/typing-dark.svg">
   <source media="(prefers-color-scheme: light)" srcset="./assets/typing-light.svg">
-  <img src="./assets/typing-light.svg" width="640" alt="Building AI Agents with LLMs; Engineering RAG Systems; Turning AI into Practical Solutions">
+  <img src="./assets/typing-light.svg" width="640" alt="Building AI Agents with LLMs; Engineering RAG Systems; Turning AI into Practical Solutions; Convincing my agent the task is done">
 </picture>
+
+<details>
+<summary><code>? for shortcuts</code></summary>
+
+```text
+/about          who's typing
+/stack          tools of the trade
+/activity       what TJ-02 has been up to
+/connect        say hi
+/compact        summarize this README (it's already short)
+/touch-grass    command not found
+esc             interrupt (please don't)
+```
+
+</details>
 
 </div>
 
@@ -77,26 +92,24 @@
 
 ### ⚡ Activity
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/TakaJun02/TakaJun02/output/snake-dark.svg">
-  <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/TakaJun02/TakaJun02/output/snake-light.svg">
-  <img src="https://raw.githubusercontent.com/TakaJun02/TakaJun02/output/snake-light.svg" alt="A snake eating my GitHub contribution graph">
-</picture>
-
 <!-- activity:start -->
 ```text
 > /activity
 
-● Contributions(past year)
-  ⎿  187 contributions on 57 active days
-● Streak()
-  ⎿  current 2 days · longest 5 days
-● Rhythm()
-  ⎿  busiest on Thursdays · best day Oct 9 with 12
-● Languages(public repos)
-  ⎿  Python 70% · Vue 13% · JavaScript 13% · CSS 4%
+   ┌─────────┐   ╭───────────────────────────────╮
+   │  ^   ^  │ ──┤ Shipped today. Streak: 1 day. │
+   │   \_/   │   ╰───────────────────────────────╯
+   └──┬───┬──┘
+      TJ-02
 
-✻ Tool-calling… (esc to interrupt)
+● Contributions(past year)
+  ⎿  187 contributions · 56 active days · best streak 5 days
+● Context(2026)
+  ⎿  █████████████████░░░ 83% used · auto-compact on Jan 1
+● Omikuji(today)
+  ⎿  末吉 — the LLM is confident and mostly right
+
+✻ Orchestrating… (esc to interrupt)
 ```
 <!-- activity:end -->
 
