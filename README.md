@@ -21,21 +21,6 @@
   <img src="./assets/typing-light.svg" width="640" alt="Building AI Agents with LLMs; Engineering RAG Systems; Turning AI into Practical Solutions; Convincing my agent the task is done">
 </picture>
 
-<details>
-<summary><code>? for shortcuts</code></summary>
-
-```text
-/about          who's typing
-/stack          tools of the trade
-/activity       what TJ-02 has been up to
-/connect        say hi
-/compact        summarize this README (it's already short)
-/touch-grass    command not found
-esc             interrupt (please don't)
-```
-
-</details>
-
 </div>
 
 ### 👋 About Me
