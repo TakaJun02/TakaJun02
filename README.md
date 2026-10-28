@@ -88,15 +88,15 @@
 > /activity
 
 ● Contributions(past year)
-  ⎿  187 contributions on 56 active days
+  ⎿  187 contributions on 57 active days
 ● Streak()
-  ⎿  current 1 day · longest 5 days
+  ⎿  current 2 days · longest 5 days
 ● Rhythm()
   ⎿  busiest on Thursdays · best day Oct 9 with 12
 ● Languages(public repos)
   ⎿  Python 70% · Vue 13% · JavaScript 13% · CSS 4%
 
-✻ Pondering… (esc to interrupt)
+✻ Tool-calling… (esc to interrupt)
 ```
 <!-- activity:end -->
 
