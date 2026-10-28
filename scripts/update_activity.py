@@ -1,13 +1,17 @@
 #!/usr/bin/env python3
-"""Draw TJ-02's daily activity report as animated SVGs.
+"""Draw the Activity section's animated SVGs from the GitHub GraphQL API.
 
     GITHUB_TOKEN=... python3 scripts/update_activity.py dist
 
 Run daily by .github/workflows/activity.yml, which publishes dist/ (together
 with the contribution snake) to the `output` branch that README.md loads its
-Activity images from. Standard library only.
+Activity images from. Standard library only. Two cards, each in dark/light:
 
-The SVG replays a Claude Code-style session on a loop: /activity is typed, a
+overview-*.svg redraws GitHub's Activity overview (shares of commits, pull
+requests, code review and issues) as a radar: the shape springs out from the
+centre, a sweep circles it, and the data points ping.
+
+activity-*.svg replays a Claude Code-style session on a loop: /activity is typed, a
 spinner works, then three tool calls stream their results (a contribution
 summary, the year as a context window filling up, and an omikuji reel that
 spins to today's fortune). On the right, TJ-02, a small agent whose mood
@@ -97,6 +101,16 @@ BUBBLE_AT = 10.8
 SUBAGENT_AT = 12.2
 FADE = (21.2, 21.8)
 
+# Activity overview: GitHub's four-axis chart, redrawn as a radar.
+OVERVIEW_H = 300
+AXES = [  # (label, contributionsCollection field, direction from the centre)
+    ("Code review", "totalPullRequestReviewContributions", (0, -1)),
+    ("Issues", "totalIssueContributions", (1, 0)),
+    ("Pull requests", "totalPullRequestContributions", (0, 1)),
+    ("Commits", "totalCommitContributions", (-1, 0)),
+]
+RADAR_X, RADAR_Y, RADAR_R = 630, 168, 76
+
 QUERY = """
 query($login: String!) {
   user(login: $login) {
@@ -105,6 +119,15 @@ query($login: String!) {
         totalContributions
         weeks { contributionDays { date contributionCount } }
       }
+      totalCommitContributions
+      totalIssueContributions
+      totalPullRequestContributions
+      totalPullRequestReviewContributions
+      restrictedContributionsCount
+      commitContributionsByRepository(maxRepositories: 100) { repository { nameWithOwner } }
+      issueContributionsByRepository(maxRepositories: 100) { repository { nameWithOwner } }
+      pullRequestContributionsByRepository(maxRepositories: 100) { repository { nameWithOwner } }
+      pullRequestReviewContributionsByRepository(maxRepositories: 100) { repository { nameWithOwner } }
     }
   }
 }
@@ -125,7 +148,7 @@ def fetch(token: str) -> dict:
         body = json.load(res)
     if body.get("errors"):
         raise SystemExit(f"GraphQL error: {body['errors']}")
-    return body["data"]["user"]["contributionsCollection"]["contributionCalendar"]
+    return body["data"]["user"]["contributionsCollection"]
 
 
 def plural(n: int, word: str) -> str:
@@ -557,17 +580,170 @@ def build(theme_name: str, r: dict) -> str:
 """
 
 
+def overview(coll: dict) -> dict:
+    """Shares of commits, PRs, reviews and issues, as on GitHub's Activity overview."""
+    counts = {label: coll[field] for label, field, _ in AXES}
+    total = sum(counts.values())
+    repos = {
+        entry["repository"]["nameWithOwner"]
+        for field in (
+            "commitContributionsByRepository", "issueContributionsByRepository",
+            "pullRequestContributionsByRepository", "pullRequestReviewContributionsByRepository",
+        )
+        for entry in coll[field]
+    }
+    return {
+        "counts": counts,
+        "pcts": {label: round(n * 100 / total) if total else 0 for label, n in counts.items()},
+        "repos": len(repos),
+        "private": coll["restrictedContributionsCount"],
+    }
+
+
+def build_overview(theme_name: str, o: dict) -> str:
+    c = THEMES[theme_name]
+    cx, cy, R = RADAR_X, RADAR_Y, RADAR_R
+    pcts = o["pcts"]
+    peak = max(pcts.values()) or 1  # like GitHub, the largest share reaches the axis end
+
+    points = [
+        (label, cx + dx * R * pcts[label] / peak, cy + dy * R * pcts[label] / peak)
+        for label, _, (dx, dy) in AXES
+    ]
+    polygon = "M" + "L".join(f"{num(x)} {num(y)}" for _, x, y in points) + "Z"
+
+    # Radar sweep: a 50° wedge, transparent at its trailing edge, rotating around the centre.
+    rw = R + 10
+    bx, by = cx + rw * 0.766, cy - rw * 0.6428
+    sweep = (
+        f'<g class="sweep"><path d="M{cx} {cy}L{cx} {cy - rw}A{rw} {rw} 0 0 1 {num(bx)} {num(by)}Z" fill="url(#sweep)"/>'
+        f'<path d="M{cx} {cy}L{num(bx)} {num(by)}" stroke="{c["accent"]}" stroke-opacity=".55" stroke-width="1.2"/></g>'
+    )
+    rings = "".join(
+        f'<circle cx="{cx}" cy="{cy}" r="{num(R * f)}" fill="none" stroke="{c["border"]}" stroke-dasharray="2 4"/>'
+        for f in (0.5, 1.0)
+    )
+    axes = (
+        f'<path d="M{cx} {cy - R - 10}V{cy + R + 10}M{cx - R - 10} {cy}H{cx + R + 10}" '
+        f'stroke="{c["accent"]}" stroke-width="2" stroke-linecap="round"/>'
+    )
+    markers = []
+    for i, (label, x, y) in enumerate(points):
+        if not pcts[label]:
+            continue
+        markers.append(
+            f'<circle class="ping" style="animation-delay:{1.4 + i * 0.6:.1f}s" cx="{num(x)}" cy="{num(y)}" r="5" '
+            f'fill="none" stroke="{c["accent"]}" stroke-width="1.5"/>'
+            f'<circle class="pop" style="animation-delay:{1.2 + i * 0.15:.2f}s" cx="{num(x)}" cy="{num(y)}" r="5" '
+            f'fill="{c["bg"]}" stroke="{c["accent"]}" stroke-width="2.4"/>'
+        )
+
+    def axis_label(label: str, x: float, y: float, anchor: str) -> str:
+        pct = pcts[label]
+        lines = ([(f"{pct}%", c["text"], "700")] if pct else []) + [(label, c["dim"], "400")]
+        return "".join(
+            f'<text x="{num(x)}" y="{num(y + i * 16)}" text-anchor="{anchor}" font-size="13" '
+            f'fill="{color}" font-weight="{weight}">{escape(text)}</text>'
+            for i, (text, color, weight) in enumerate(lines)
+        )
+
+    def side(label: str) -> float:  # vertical start so one or two lines sit centred on the axis
+        return cy - 4 if pcts[label] else cy + 4
+
+    labels = (
+        axis_label("Code review", cx, cy - R - 20 - (16 if pcts["Code review"] else 0), "middle")
+        + axis_label("Issues", cx + R + 20, side("Issues"), "start")
+        + axis_label("Pull requests", cx, cy + R + 28, "middle")
+        + axis_label("Commits", cx - R - 20, side("Commits"), "end")
+    )
+
+    # Left panel: where the contributions went, as bars that grow in.
+    rows = sorted(AXES, key=lambda a: -o["counts"][a[0]])
+    bars = []
+    for i, (label, _, _) in enumerate(rows):
+        y = 150 + i * 32
+        pct = pcts[label]
+        bars.append(
+            f'<text x="24" y="{y}" font-size="13" fill="{c["text"]}">{escape(label)}</text>'
+            f'<text x="182" y="{y}" font-size="13" text-anchor="end" fill="{c["dim"]}">{o["counts"][label]:,}</text>'
+            f'<rect x="196" y="{y - 9}" width="150" height="9" rx="4.5" fill="{c["track"]}"/>'
+            + (f'<rect class="bar" style="animation-delay:{0.4 + i * 0.12:.2f}s" x="196" y="{y - 9}" '
+               f'width="{num(150 * pct / 100)}" height="9" rx="4.5" fill="{c["accent"]}"/>' if pct else "")
+            + f'<text x="358" y="{y}" font-size="13" fill="{c["text"]}" font-weight="700">{pct}%</text>'
+        )
+    repo_icon = (
+        f'<path d="M26 72.5h9.5v13H28a2 2 0 0 1-2-2zM26 83.5a2 2 0 0 1 2-2h7.5" fill="none" '
+        f'stroke="{c["dim"]}" stroke-width="1.4" stroke-linejoin="round"/>'
+    )
+    private = (
+        f'<text x="44" y="104" font-size="12" fill="{c["dim"]}">plus {plural(o["private"], "private contribution")}</text>'
+        if o["private"] else ""
+    )
+    repos_text = f"{o['repos']:,} {'repository' if o['repos'] == 1 else 'repositories'}"
+    summary = "; ".join(f"{label} {pcts[label]}%" for label, _, _ in AXES)
+    desc = f"Activity overview for the past year: {summary}. Contributed to {repos_text}."
+    header_star = star(X0 + 6, 25, 5, "", c["accent"])
+    return f"""<svg xmlns="http://www.w3.org/2000/svg" width="{W}" height="{OVERVIEW_H}" viewBox="0 0 {W} {OVERVIEW_H}" role="img" aria-labelledby="title desc">
+  <title id="title">Activity overview</title>
+  <desc id="desc">{escape(desc)}</desc>
+  <!-- Generated by scripts/update_activity.py ({theme_name} theme). -->
+  <defs>
+    <linearGradient id="sweep" gradientUnits="userSpaceOnUse" x1="{cx}" y1="{cy - rw}" x2="{num(bx)}" y2="{num(by)}">
+      <stop offset="0" stop-color="{c["accent"]}" stop-opacity="0"/>
+      <stop offset="1" stop-color="{c["accent"]}" stop-opacity=".32"/>
+    </linearGradient>
+  </defs>
+  <style>
+    text {{ font-family: {MONO}; font-size: {FONT}px; }}
+    .grow {{ transform-origin: {cx}px {cy}px; animation: grow 1.2s cubic-bezier(.2, .9, .3, 1.25) .3s both; }}
+    .sweep {{ transform-origin: {cx}px {cy}px; animation: sweep 4s linear infinite; }}
+    .pop, .ping, .bar {{ transform-box: fill-box; }}
+    .pop {{ transform-origin: center; animation: grow .5s cubic-bezier(.2, .9, .3, 1.6) both; }}
+    .ping {{ transform-origin: center; opacity: 0; animation: ping 2.4s ease-out infinite; }}
+    .bar {{ transform-origin: left; animation: bar 1s cubic-bezier(.2, .8, .2, 1) both; }}
+    @keyframes grow {{ from {{ transform: scale(0); }} to {{ transform: scale(1); }} }}
+    @keyframes sweep {{ to {{ transform: rotate(360deg); }} }}
+    @keyframes ping {{ 0% {{ transform: scale(1); opacity: .8; }} 100% {{ transform: scale(3.2); opacity: 0; }} }}
+    @keyframes bar {{ from {{ transform: scaleX(0); }} }}
+    @media (prefers-reduced-motion: reduce) {{
+      * {{ animation: none !important; }}
+      .sweep {{ display: none; }}
+    }}
+  </style>
+  <rect x=".5" y=".5" width="{W - 1}" height="{OVERVIEW_H - 1}" rx="10" fill="{c["bg"]}" stroke="{c["border"]}"/>
+  {header_star}
+  <text x="{X0 + 18}" y="30" font-size="13"><tspan fill="{c["accent"]}" font-weight="700">Activity overview</tspan></text>
+  <text x="{W - X0}" y="30" font-size="12" text-anchor="end" fill="{c["dim"]}">past year</text>
+  <path d="M1 42H{W - 1}" stroke="{c["border"]}"/>
+  {repo_icon}
+  <text x="44" y="84" font-size="14" fill="{c["text"]}">Contributed to <tspan font-weight="700">{repos_text}</tspan></text>
+  {private}
+  {"".join(bars)}
+  <path d="M420 60V{OVERVIEW_H - 18}" stroke="{c["border"]}"/>
+  {rings}
+  {sweep}
+  {axes}
+  <path class="grow" d="{polygon}" fill="{c["accent"]}" fill-opacity=".28" stroke="{c["accent"]}" stroke-width="1.5" stroke-linejoin="round"/>
+  {"".join(markers)}
+  {labels}
+</svg>
+"""
+
+
 def main() -> None:
     token = os.environ.get("GITHUB_TOKEN")
     if not token:
         raise SystemExit("GITHUB_TOKEN is required")
     out = Path(sys.argv[1] if len(sys.argv) > 1 else "dist")
     out.mkdir(parents=True, exist_ok=True)
-    r = report(fetch(token))
+    coll = fetch(token)
+    r, o = report(coll["contributionCalendar"]), overview(coll)
     for name in THEMES:
-        path = out / f"activity-{name}.svg"
-        path.write_text(build(name, r), encoding="utf-8")
-        print(f"wrote {path} ({path.stat().st_size:,} bytes) · mood={r['mood']}")
+        for stem, svg in (("activity", build(name, r)), ("overview", build_overview(name, o))):
+            path = out / f"{stem}-{name}.svg"
+            path.write_text(svg, encoding="utf-8")
+            print(f"wrote {path} ({path.stat().st_size:,} bytes)")
+    print(f"mood={r['mood']} · overview={o['pcts']}")
 
 
 if __name__ == "__main__":
