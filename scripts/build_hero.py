@@ -1,260 +1,421 @@
 #!/usr/bin/env python3
-"""Generate the hero image at the top of README.md and the two buttons under it.
+"""Generate the hero at the top of README.md and the two buttons under it.
 
     python3 scripts/build_hero.py
 
 Writes assets/hero.svg, assets/btn-portfolio.svg and assets/btn-x.svg.
-Needs numpy. Only this script uses it, and the CI workflow never runs it,
-because the hero does not depend on activity data.
+Needs numpy, for the characters (through build_agents.py). The CI workflow
+never runs it, because the hero does not depend on activity data.
 
-What it draws
-- A Ghostty-style terminal window (after ghostty.org). Inside it, Clawd from
-  Claude Code and the Codex mark take turns spinning in 3D, drawn as ASCII the
-  way ghostty.org draws its ghost: one ray per character cell, Lambert shading,
-  and the 10-step luminance ramp from ghostty-org/website's
-  bin/video-to-terminal/video-to-terminal.sh (MIT).
-- Around it, Git City's UI language (after thegitcity.com): Silkscreen pixel
-  type drawn as paths, dark panels, hard offset shadows, HUD chips and an
-  activity ticker. GitHub shows README SVGs as images, so web fonts never load;
-  GLYPHS below holds Silkscreen's bitmaps at its native 8px size (OFL-1.1).
-- Clawd follows the quadrant-pixel layout that Claude Code prints. The Codex
-  mark uses the path in openai/codex codex-rs/tui/src/empty_state_animation/
-  paths.rs. Both are fan art of other people's characters. The README says so
-  under the image.
+What it draws, inside a Ghostty-style terminal window
+- TAKAJUN02 in figlet's ANSI Shadow letters, the way Claude Code prints its
+  own name: clay blocks with a box-drawing shadow, and Claude Code's shimmer
+  stepping across them one column at a time.
+- Clawd at the bottom left and the Codex mark at the bottom right, floating as
+  on docs/agents.html: the same renderer (scripts/build_agents.py), the same
+  31 ms frames and outline, at three quarters of the page's size, which is
+  ghostty.org's own resolution for its ghost. Both are fan art.
+- Between them, a Claude Code-style welcome box. Under each character, its
+  tool's status line: Claude Code's spinner (· ✢ ✳ ✶ ✻ ✽) and Codex's
+  "Working", each with its shimmer.
 
 How it animates
-- Each distinct frame is a <g> in <defs>. The timeline is a row of <use>
-  slots, one per TICK; CSS shows each slot for exactly one tick (step-end), so
-  a held pose reuses its frame and costs no extra bytes.
-- Clawd blinks while it holds still, the Codex cursor (the `_`) blinks while it
-  holds still, and the two characters swap through a short dissolve.
-- Every glyph in a monospace font has the same advance, so the rows stay
-  aligned in whichever monospace font the viewer has.
-- prefers-reduced-motion shows Clawd's first frame and stops the ticker.
+- Every frame of a character is one <text>. CSS shows it for exactly one tick
+  (step-end), so the loop plays at the page's frame rate.
+- GitHub shows README SVGs as images, so web fonts cannot load. The text uses
+  a subset of JetBrains Mono embedded as a data URI (scripts/fonts, SIL Open
+  Font License 1.1). Its 0.6 em advance keeps the ASCII cells on the grid.
+- prefers-reduced-motion shows the first frame and stops the shimmers.
 """
 
 from __future__ import annotations
 
+import base64
 import math
-import random
 from pathlib import Path
 from xml.sax.saxutils import escape
 
-import numpy as np
+from build_agents import BODY_CELLS, LINE_CELLS, Timeline, render_all, simulate
+from build_tj02 import DT, RAMP
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT_DIR = ROOT / "assets"
+FONT_FILE = Path(__file__).resolve().parent / "fonts" / "JetBrainsMono-Regular-subset.woff2"
+# The subset holds printable ASCII plus these. To add a character, subset
+# JetBrains Mono again with fontTools' pyftsubset and add it here.
+FONT_CHARS = {chr(c) for c in range(0x20, 0x7F)} | set("·…•")
 
-# --- Palette: Anthropic's warm grays plus each tool's own accent ---------------
-BG = "#141413"         # card
-WINDOW = "#1A1918"     # terminal window
-BORDER = "#3D3D3A"
-DOT = "#262624"        # card dot grid
+# --- Palette: ghostty.org's greys, Claude Code's clay, Codex's blue -----------------
+BG = "#0F0F11"
+BORDER = "#4C4C50"
+TEXT = "#C3C3C4"
+MUTED = "#828286"
+WHITE = "#FFFFFF"
+CLAUDE, CLAUDE_SHIMMER = "#D77757", "#EB9F7F"   # Claude Code: claude / claudeShimmer
+CODEX = "#63A8F8"
+
+# --- Layout ----------------------------------------------------------------------------
+W = 1000
+LOGO_CW, LOGO_CH = 11, 22      # one terminal cell of the logo
+LOGO_Y = 62
+LINE_T, LINE_GAP = 1.5, 2.5    # box-drawing stroke, and half the gap of its double lines
+TAGLINE_Y = 236
+ART_TOP = 262                  # the characters' boxes start here
+ART_FONT = 8.0                 # px; cells are 0.6 em wide and 1.32 em tall, as on the page
+CELL_W, CELL_H = ART_FONT * 0.6, ART_FONT * 1.32
+UI_FONT = 11.0                 # px, for the welcome box and the status lines
+UI_CW = UI_FONT * 0.6
+SCALE = 0.75                   # of docs/agents.html's characters
+
+# --- Timeline ----------------------------------------------------------------------------
+LOOP = 192                     # frames: 4 of ghostty.org's 1.5 s bobs, 5.95 s
+TICK = DT
+CLAWD_TL = Timeline(n=LOOP, glances=((82, 26, 0.3, 0.05),), blinks=(36, 132, 142))
+CODEX_TL = Timeline(n=LOOP, glances=((150, 26, -0.45, -0.05),), codex=((0, LOOP),),
+                    phase=24)      # half a bob: it rises while Clawd sinks
+SPIN_STEP = 0.12               # s per spinner glyph, forwards then backwards
+
+# figlet's ANSI Shadow font, "TAKAJUN02".
+BANNER = (
+    "████████╗ █████╗ ██╗  ██╗ █████╗      ██╗██╗   ██╗███╗   ██╗ ██████╗ ██████╗",
+    "╚══██╔══╝██╔══██╗██║ ██╔╝██╔══██╗     ██║██║   ██║████╗  ██║██╔═████╗╚════██╗",
+    "   ██║   ███████║█████╔╝ ███████║     ██║██║   ██║██╔██╗ ██║██║██╔██║ █████╔╝",
+    "   ██║   ██╔══██║██╔═██╗ ██╔══██║██   ██║██║   ██║██║╚██╗██║████╔╝██║██╔═══╝",
+    "   ██║   ██║  ██║██║  ██╗██║  ██║╚█████╔╝╚██████╔╝██║ ╚████║╚██████╔╝███████╗",
+    "   ╚═╝   ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝ ╚════╝  ╚═════╝ ╚═╝  ╚═══╝ ╚═════╝ ╚══════╝",
+)
+
+
+def fmt(v):
+    s = f"{v:.2f}".rstrip("0").rstrip(".")
+    return "0" if s == "-0" else s
+
+
+def rect_d(x, y, w, h):
+    return f"M{fmt(x)} {fmt(y)}h{fmt(w)}v{fmt(h)}h{fmt(-w)}z"
+
+
+# === The logo ===========================================================================
+
+def box_segments(ch, x0, y0):
+    """A box-drawing character as thin rectangles (x, y, w, h), drawn the way a
+    terminal draws them: double lines centred in the cell."""
+    x1, y1 = x0 + LOGO_CW, y0 + LOGO_CH
+    cx, cy = x0 + LOGO_CW / 2, y0 + LOGO_CH / 2
+    t, d = LINE_T, LINE_GAP
+    h = lambda xa, xb, y: (xa, y - t / 2, xb - xa, t)
+    v = lambda x, ya, yb: (x - t / 2, ya, t, yb - ya)
+    if ch == "═":
+        return [h(x0, x1, cy - d), h(x0, x1, cy + d)]
+    if ch == "║":
+        return [v(cx - d, y0, y1), v(cx + d, y0, y1)]
+    if ch == "╗":     # left and down
+        return [h(x0, cx + d + t / 2, cy - d), v(cx + d, cy - d - t / 2, y1),
+                h(x0, cx - d + t / 2, cy + d), v(cx - d, cy + d - t / 2, y1)]
+    if ch == "╔":     # right and down
+        return [h(cx - d - t / 2, x1, cy - d), v(cx - d, cy - d - t / 2, y1),
+                h(cx + d - t / 2, x1, cy + d), v(cx + d, cy + d - t / 2, y1)]
+    if ch == "╝":     # left and up
+        return [h(x0, cx + d + t / 2, cy + d), v(cx + d, y0, cy + d + t / 2),
+                h(x0, cx - d + t / 2, cy - d), v(cx - d, y0, cy - d + t / 2)]
+    if ch == "╚":     # right and up
+        return [h(cx - d - t / 2, x1, cy + d), v(cx - d, y0, cy + d + t / 2),
+                h(cx + d - t / 2, x1, cy - d), v(cx + d, y0, cy - d + t / 2)]
+    raise ValueError(ch)
+
+
+def merge(rects):
+    """Join rectangles that continue each other along a row or a column."""
+    rects = sorted(set((round(x, 3), round(y, 3), round(w, 3), round(h, 3)) for x, y, w, h in rects))
+    out = []
+    for r in sorted(rects, key=lambda r: (r[1], r[3], r[0])):        # along rows
+        if out and out[-1][1] == r[1] and out[-1][3] == r[3] and abs(out[-1][0] + out[-1][2] - r[0]) < 0.01:
+            px, py, pw, ph = out.pop()
+            r = (px, py, pw + r[2], ph)
+        out.append(r)
+    rows, out = out, []
+    for r in sorted(rows, key=lambda r: (r[0], r[2], r[1])):         # then along columns
+        if out and out[-1][0] == r[0] and out[-1][2] == r[2] and abs(out[-1][1] + out[-1][3] - r[1]) < 0.01:
+            px, py, pw, ph = out.pop()
+            r = (px, py, pw, ph + r[3])
+        out.append(r)
+    return out
+
+
+def logo(x0, y0):
+    """The banner as two paths: the blocks and their box-drawing shadow."""
+    blocks, lines = [], []
+    for r, row in enumerate(BANNER):
+        for c, ch in enumerate(row):
+            x, y = x0 + c * LOGO_CW, y0 + r * LOGO_CH
+            if ch == "█":
+                blocks.append((x, y, LOGO_CW, LOGO_CH))
+            elif ch != " ":
+                lines += box_segments(ch, x, y)
+    # A hair of overlap, so neighbouring blocks never show a seam when scaled.
+    blocks = [(x, y, w + 0.35, h + 0.35) for x, y, w, h in merge(blocks)]
+    return "".join(rect_d(*b) for b in blocks), "".join(rect_d(*b) for b in merge(lines))
+
+
+# === Claude Code's spinner glyphs ==========================================================
+
+def rotated(points, a):
+    ca, sa = math.cos(a), math.sin(a)
+    return [(x * ca - y * sa, x * sa + y * ca) for x, y in points]
+
+
+def teardrops(n, r, w):
+    d = []
+    for k in range(n):
+        (ax, ay), (bx, by) = rotated([(r - w, -w), (r - w, w)], -math.pi / 2 + 2 * math.pi * k / n)
+        d.append(f"M0 0L{fmt(ax)} {fmt(ay)}A{fmt(w)} {fmt(w)} 0 1 1 {fmt(bx)} {fmt(by)}Z")
+    return "".join(d)
+
+
+def spokes(n, r, t):
+    d = []
+    for k in range(n):
+        pts = rotated([(0, -t), (r, -t), (r, t), (0, t)], -math.pi / 2 + 2 * math.pi * k / n)
+        d.append("M" + "L".join(f"{fmt(x)} {fmt(y)}" for x, y in pts) + "Z")
+    return "".join(d)
+
+
+def star(n, r, inner):
+    pts = []
+    for k in range(2 * n):
+        a = -math.pi / 2 + math.pi * k / n
+        rr = r if k % 2 == 0 else inner
+        pts.append((rr * math.cos(a), rr * math.sin(a)))
+    return "M" + "L".join(f"{fmt(x)} {fmt(y)}" for x, y in pts) + "Z"
+
+
+SPINNER = [                    # · ✢ ✳ ✶ ✻ ✽, drawn about the origin in a 12 px cell
+    "M-1.6 0a1.6 1.6 0 1 0 3.2 0a1.6 1.6 0 1 0 -3.2 0z",
+    teardrops(4, 5.4, 1.5),
+    spokes(8, 5.4, 0.6),
+    star(6, 5.6, 2.4),
+    teardrops(8, 5.6, 1.25),
+    teardrops(8, 5.8, 1.8),
+]
+
+# === The characters ========================================================================
+
+def crop(frames):
+    """Cut the loop down to the box that every frame fits in."""
+    grids = [f.split("\n") for f in frames]
+    used = [(r, row) for g in grids for r, row in enumerate(g) if row.strip()]
+    top, bottom = min(r for r, _ in used), max(r for r, _ in used)
+    left = min(len(row) - len(row.lstrip()) for _, row in used)
+    right = max(len(row) for _, row in used)
+    return [[row[left:] for row in g[top:bottom + 1]] for g in grids], right - left, bottom - top + 1
+
+
+# Frames are laid out at 10 px and scaled down to ART_FONT, so every column
+# lands on a whole number (0.6 em = 6 units) and the file stays smaller.
+INNER_FONT = 10
+INNER_CW, INNER_CH, INNER_BASE = 6, 13.2, 10.2
+
+
+def layer(rows, cells):
+    """One colour of a frame: a tspan per stretch of each row. Gaps shorter
+    than a tspan's markup stay as spaces; the font is monospace."""
+    out = []
+    for r, row in enumerate(rows):
+        line = "".join(RAMP[cells.index(ch)] if ch in cells else " " for ch in row)
+        runs, c = [], 0
+        while c < len(line):
+            if line[c] == " ":
+                c += 1
+                continue
+            s = c
+            while c < len(line) and line[c] != " ":
+                c += 1
+            if runs and s - runs[-1][1] < 20:
+                runs[-1][1] = c
+            else:
+                runs.append([s, c])
+        for k, (s, e) in enumerate(runs):
+            y = f' y="{fmt(r * INNER_CH + INNER_BASE)}"' if k == 0 else ""
+            out.append(f'<tspan x="{s * INNER_CW}"{y}>{line[s:e]}</tspan>')
+    return "".join(out)
+
+
+def frame_group(rows, cls, fid, delay):
+    """One frame: the character in its colour and the outline in white."""
+    return (f'<g id="{fid}" class="f" style="animation-delay:{delay:.3f}s">'
+            f'<text class="{cls}">{layer(rows, BODY_CELLS)}</text>'
+            f'<text class="o">{layer(rows, LINE_CELLS)}</text></g>')
+
+
+def character(frames, cls, prefix, x, y):
+    rows, _, _ = crop(frames)
+    body = "".join(frame_group(g, cls, f"{prefix}{i}", i * TICK) for i, g in enumerate(rows))
+    return f'<g transform="translate({fmt(x)} {fmt(y)}) scale({fmt(ART_FONT / INNER_FONT)})">{body}</g>'
+
+# === Text ==================================================================================
+
+def text(x, y, s, size, fill, anchor=None, extra=""):
+    assert set(s) <= FONT_CHARS, set(s) - FONT_CHARS
+    a = f' text-anchor="{anchor}"' if anchor else ""
+    return f'<text x="{fmt(x)}" y="{fmt(y)}" font-size="{fmt(size)}" fill="{fill}"{a}{extra}>{escape(s)}</text>'
+
+
+def spans(x, y, pieces, size):
+    """Several coloured pieces on one line, laid out on the monospace grid."""
+    out, cw = [], size * 0.6
+    for s, fill in pieces:
+        if s.strip():
+            out.append(text(x, y, s, size, fill))
+        x += len(s) * cw
+    return "".join(out)
+
+
+def shimmer(cid, x, y, s, size, fill, glow, period, width=3, step=0.07):
+    """Claude Code's shimmer: a few cells of a lighter colour stepping across
+    the text one cell at a time, then a pause."""
+    cw = size * 0.6
+    steps = len(s) + width
+    run = steps * step
+    pct = 100 * run / period
+    css = (f".{cid}{{animation:{cid} {period:g}s infinite}}"
+           f"@keyframes {cid}{{0%{{transform:translateX(0);animation-timing-function:steps({steps},end)}}"
+           f"{pct:.2f}%,100%{{transform:translateX({fmt(steps * cw)}px)}}}}")
+    svg = (text(x, y, s, size, fill) +
+           f'<clipPath id="{cid}c">{text(x, y, s, size, fill)}</clipPath>'
+           f'<g clip-path="url(#{cid}c)"><rect class="{cid}" x="{fmt(x - width * cw)}" y="{fmt(y - size)}" '
+           f'width="{fmt(width * cw)}" height="{fmt(size * 1.4)}" fill="{glow}"/></g>')
+    return svg, css
+
+
+def spinner(cx, cy, scale, fill):
+    out = [f'<g transform="translate({fmt(cx)} {fmt(cy)}) scale({fmt(scale)})" fill="{fill}">']
+    seq = list(range(len(SPINNER))) + list(reversed(range(len(SPINNER))))
+    for k, g in enumerate(seq):
+        out.append(f'<path id="sp{k}" class="sp" d="{SPINNER[g]}" style="animation-delay:{k * SPIN_STEP:.2f}s"/>')
+    out.append("</g>")
+    css = (f".sp{{visibility:hidden;animation:sp {len(seq) * SPIN_STEP:.2f}s step-end infinite}}"
+           f"@keyframes sp{{0%{{visibility:visible}}{100 / len(seq):.4f}%{{visibility:hidden}}}}")
+    return "".join(out), css
+
+# === Hero ==================================================================================
+
+def build_hero():
+    clawd_poses, codex_poses = simulate(CLAWD_TL), simulate(CODEX_TL)
+    for p in clawd_poses + codex_poses:
+        p["scale"] = SCALE
+    frames = render_all(clawd_poses + codex_poses)
+    clawd, codex = frames[:LOOP], frames[LOOP:]
+    _, clawd_w, clawd_h = crop(clawd)
+    _, codex_w, codex_h = crop(codex)
+    clawd_w, clawd_h = clawd_w * CELL_W, clawd_h * CELL_H
+    codex_w, codex_h = codex_w * CELL_W, codex_h * CELL_H
+    art_h = max(clawd_h, codex_h)
+    H = round(ART_TOP + art_h + 62)
+    art_mid = ART_TOP + art_h / 2
+    clawd_cx, codex_cx = 188, 814
+    clawd_x, clawd_y = clawd_cx - clawd_w / 2, art_mid - clawd_h / 2
+    codex_x, codex_y = codex_cx - codex_w / 2, art_mid - codex_h / 2
+    status_y = ART_TOP + art_h + 30
+
+    css = [
+        f'@font-face{{font-family:J;src:url(data:font/woff2;base64,{base64.b64encode(FONT_FILE.read_bytes()).decode()}) format("woff2")}}',
+        "text{font-family:J,ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;white-space:pre}",
+        f".f{{font-size:{INNER_FONT}px;visibility:hidden;animation:f {LOOP * TICK:.3f}s step-end infinite}}",
+        f"@keyframes f{{0%{{visibility:visible}}{100 / LOOP:.4f}%{{visibility:hidden}}}}",
+        f".c{{fill:{CLAUDE}}}.x{{fill:{CODEX}}}.o{{fill:{TEXT}}}",
+    ]
+    out = []
+
+    # Ghostty-style window: hairline border, traffic lights, centred title.
+    out.append(f'<rect x=".5" y=".5" width="{W - 1}" height="{H - 1}" rx="12" fill="{BG}" stroke="{BORDER}"/>')
+    for i, c in enumerate(("#FF605C", "#FFBD44", "#00CA4E")):
+        out.append(f'<circle cx="{20 + i * 20}" cy="19" r="6" fill="{c}"/>')
+    title = "takajun02"
+    tx = W / 2 - (len(title) + 2) * 13 * 0.6 / 2
+    out.append(f'<path transform="translate({fmt(tx + 4)} 18.5) scale(0.62)" fill="{CLAUDE}" d="{SPINNER[4]}"/>')
+    out.append(text(tx + 2 * 13 * 0.6, 23, title, 13, MUTED))
+
+    # TAKAJUN02, with the shimmer stepping across it.
+    cols = max(map(len, BANNER))
+    lx = round((W - cols * LOGO_CW) / 2)
+    blocks, lines = logo(lx, LOGO_Y)
+    out.append(f'<path id="lb" fill="{CLAUDE}" d="{blocks}"/>')
+    out.append(f'<path id="ll" fill="{CLAUDE}" fill-opacity=".62" d="{lines}"/>')
+    band = 3
+    steps = cols + band
+    css.append(f".ls{{animation:ls 5s infinite}}@keyframes ls{{0%{{transform:translateX(0);"
+               f"animation-timing-function:steps({steps},end)}}{100 * steps * 0.045 / 5:.2f}%,100%{{transform:translateX({steps * LOGO_CW}px)}}}}")
+    out.append('<clipPath id="lc"><use href="#lb"/><use href="#ll"/></clipPath>')
+    out.append(f'<g clip-path="url(#lc)"><rect class="ls" x="{lx - band * LOGO_CW}" y="{LOGO_Y}" '
+               f'width="{band * LOGO_CW}" height="{len(BANNER) * LOGO_CH + 1}" fill="{CLAUDE_SHIMMER}"/></g>')
+
+    out.append(text(W / 2, TAGLINE_Y, "AI agent architect · software engineer", 16, TEXT, anchor="middle"))
+
+    # Clawd and the Codex mark.
+    out.append(character(clawd, "c", "c", clawd_x, clawd_y))
+    out.append(character(codex, "x", "x", codex_x, codex_y))
+
+    # A Claude Code-style welcome box between them.
+    lines_ = [("✻ ", "Welcome to TakaJun02's GitHub!"),
+              ("", ""),
+              ("  ", "/portfolio for work, /x for updates"),
+              ("", ""),
+              ("  ", "cwd: ~/akita/ai-agents")]
+    box_cols = max(len(a + b) for a, b in lines_) + 4
+    box_w, line_h = box_cols * UI_CW, UI_FONT * 1.5
+    box_h = len(lines_) * line_h + 16
+    bx, by = W / 2 - box_w / 2, art_mid - box_h / 2
+    out.append(f'<rect x="{fmt(bx)}" y="{fmt(by)}" width="{fmt(box_w)}" height="{fmt(box_h)}" rx="7" fill="none" stroke="{CLAUDE}"/>')
+    tx0 = bx + 2 * UI_CW
+    for i, (lead, body) in enumerate(lines_):
+        y = by + 8 + (i + 0.78) * line_h
+        if lead == "✻ ":
+            out.append(f'<path transform="translate({fmt(tx0 + UI_CW / 2)} {fmt(y - UI_FONT * 0.36)}) scale(0.6)" fill="{CLAUDE}" d="{SPINNER[4]}"/>')
+            out.append(spans(tx0 + 2 * UI_CW, y, [("Welcome to ", TEXT), ("TakaJun02", WHITE), ("'s GitHub!", TEXT)], UI_FONT))
+        elif body.startswith("/"):
+            out.append(spans(tx0 + 2 * UI_CW, y, [("/portfolio", TEXT), (" for work, ", MUTED), ("/x", TEXT), (" for updates", MUTED)], UI_FONT))
+        elif body:
+            out.append(spans(tx0 + 2 * UI_CW, y, [(body, MUTED)], UI_FONT))
+
+    # Under Clawd, Claude Code's status line; under the Codex mark, Codex's.
+    a_word, a_rest = "Building agents…", " (esc to interrupt)"
+    a_x = clawd_cx - (2 + len(a_word + a_rest)) * UI_CW / 2
+    sp, sp_css = spinner(a_x + UI_CW / 2, status_y - UI_FONT * 0.36, 0.62, CLAUDE)
+    out.append(sp)
+    css.append(sp_css)
+    word, word_css = shimmer("s1", a_x + 2 * UI_CW, status_y, a_word, UI_FONT, CLAUDE, CLAUDE_SHIMMER, 2.6)
+    out.append(word)
+    css.append(word_css)
+    out.append(spans(a_x + (2 + len(a_word)) * UI_CW, status_y, [(a_rest, MUTED)], UI_FONT))
+
+    b_word, b_rest = "Working", " (12s • esc to interrupt)"
+    b_x = codex_cx - (2 + len(b_word + b_rest)) * UI_CW / 2
+    out.append(spans(b_x, status_y, [("•", CODEX)], UI_FONT))
+    word, word_css = shimmer("s2", b_x + 2 * UI_CW, status_y, b_word, UI_FONT, TEXT, WHITE, 2.2)
+    out.append(word)
+    css.append(word_css)
+    out.append(spans(b_x + (2 + len(b_word)) * UI_CW, status_y, [(b_rest, MUTED)], UI_FONT))
+
+    css.append("@media (prefers-reduced-motion:reduce){.f,.sp,.ls,.s1,.s2{animation:none!important}"
+               "#c0,#x0,#sp8{visibility:visible}}")
+    svg = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}" width="{W}" height="{H}" xml:space="preserve">',
+           "<!-- TAKAJUN02 in figlet's ANSI Shadow font. Clawd (Claude Code, Anthropic) and the Codex mark (OpenAI)\n"
+           "     are fan art, rendered by scripts/build_agents.py after ghostty.org's terminal animation\n"
+           "     (github.com/ghostty-org/website, MIT). Text is set in a subset of JetBrains Mono,\n"
+           "     Copyright 2020 The JetBrains Mono Project Authors, SIL Open Font License 1.1. -->",
+           f"<style>{''.join(css)}</style>"] + out + ["</svg>"]
+    return "".join(svg), H
+
+
+# === Buttons ===============================================================================
+# The buttons keep the pixel style of the earlier hero.
+
+BTN_BG = "#141413"
+BTN_WINDOW = "#1A1918"
+BTN_BORDER = "#3D3D3A"
 CREAM = "#E8E6DC"
-MUTED = "#87867F"
-DIM = "#5E5D59"
 CLAY = "#D97757"
 CLAY_SHADOW = "#7A3E28"
-LIVE = "#4EBA65"
-CLAWD_BASE, CLAWD_HI = "#D77757", "#EB9F7F"   # Claude Code: claude / claudeShimmer
-CODEX_BASE, CODEX_HI = "#63A8F8", "#D2DDEB"   # Codex: UI accent / logo key light
-
-# --- ASCII renderer --------------------------------------------------------------
-RAMP = "·~ox+=*%$@"    # ghostty.org's ramp, darkest to brightest
-COLS, ROWS = 76, 30
-CELL_W, CELL_H = 7.2, 13.0
-FONT = "ui-monospace,SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace"
-TILT = math.radians(-14)          # look at the characters a little from above
-LIGHT_POS = np.array([-14.0, 13.0, -22.0])   # a point light up and to the left of the camera
-
-# --- Timeline (in ticks) -----------------------------------------------------------
-TICK = 0.09            # seconds per frame
-SPIN = 30              # frames per full turn (12 degrees each)
-HOLD_FRONT = 12
-HOLD_AFTER = 6
-DISSOLVE = 4
-
-
-# === Scene ===========================================================================
-
-def sd_box(p, center, half, r=0.12):
-    q = np.abs(p - np.asarray(center)) - (np.asarray(half) - r)
-    return np.linalg.norm(np.maximum(q, 0.0), axis=1) + np.minimum(q.max(axis=1), 0.0) - r
-
-
-def sd_segment2(x, y, a, b):
-    pa = np.stack([x - a[0], y - a[1]], axis=1)
-    ba = np.array([b[0] - a[0], b[1] - a[1]])
-    h = np.clip((pa @ ba) / (ba @ ba), 0.0, 1.0)
-    return np.linalg.norm(pa - h[:, None] * ba, axis=1)
-
-
-class Clawd:
-    """Clawd as boxes. One terminal quadrant pixel is 1 wide and 2 tall."""
-
-    depth = 7.0
-    scale = 0.29            # world units per column
-    base, hi = CLAWD_BASE, CLAWD_HI
-
-    def __init__(self, blink=False):
-        d = self.depth / 2
-        self.parts = [
-            ((0, 1, 0), (6.5, 4, d)),            # body: pixel rows 0-3, columns 3-15
-            ((-7.5, 0, 0), (1, 1, 1.5)),         # arms: row 2, columns 1-2 and 16-17
-            ((7.5, 0, 0), (1, 1, 1.5)),
-        ]
-        for x in (-6, -4, 4, 6):                 # legs: row 4, columns 3, 5, 13, 15
-            for z in (-d + 0.5, d - 0.5):        # a front pair and a back pair
-                self.parts.append(((x, -4, z), (0.5, 1, 0.5)))
-        # Eyes are sockets carved into the front face (row 1, columns 5 and 13).
-        # A closed eye leaves only a thin slit at the bottom, like Claude Code's `▂`.
-        eye_y, eye_h = ((1.25, 0.25) if blink else (2.0, 1.0))
-        self.eyes = [((x, eye_y, -d), (0.5, eye_h, 0.6)) for x in (-4, 4)]
-
-    def sdf(self, p):
-        body = np.min([sd_box(p, c, h) for c, h in self.parts], axis=0)
-        eyes = np.min([sd_box(p, c, h, r=0.02) for c, h in self.eyes], axis=0)
-        return np.maximum(body, -eyes)
-
-    def material(self, p):
-        eyes = np.min([sd_box(p, c, h, r=0.02) for c, h in self.eyes], axis=0)
-        return np.where(eyes < 0.08, "eye", "body")
-
-
-class CodexMark:
-    """The Codex mark (ring, `>` and `_`) extruded into a thick coin."""
-
-    depth = 2.2
-    scale = 0.34
-    base, hi = CODEX_BASE, CODEX_HI
-    half_stroke = 0.665
-
-    def __init__(self, cursor=True):
-        self.cursor = cursor
-
-    def sdf(self, p):
-        # paths.rs works in a 20x20 box with y pointing down; centre it, y up.
-        x, y, z = p[:, 0] + 10.0, 10.0 - p[:, 1], p[:, 2]
-        hs = self.half_stroke
-        ring = np.abs(np.hypot(x - 10.0, y - 10.0) - 7.25) - hs
-        chevron = np.minimum(sd_segment2(x, y, (7.083, 7.917), (8.23, 10.0)),
-                             sd_segment2(x, y, (8.23, 10.0), (7.083, 12.083))) - hs
-        shape = np.minimum(ring, chevron)
-        if self.cursor:
-            shape = np.minimum(shape, sd_segment2(x, y, (10.833, 12.083), (13.333, 12.083)) - hs)
-        wz = np.abs(z) - self.depth / 2
-        w = np.stack([shape, wz], axis=1)
-        return np.minimum(w.max(axis=1), 0.0) + np.linalg.norm(np.maximum(w, 0.0), axis=1)
-
-    def material(self, p):
-        return np.full(len(p), "body", dtype=object)
-
-
-def rotation(yaw, tilt):
-    cy, sy, ct, st = math.cos(yaw), math.sin(yaw), math.cos(tilt), math.sin(tilt)
-    ry = np.array([[cy, 0, sy], [0, 1, 0], [-sy, 0, cy]])
-    rx = np.array([[1, 0, 0], [0, ct, -st], [0, st, ct]])
-    return rx @ ry
-
-
-def render(model, yaw):
-    """Return a ROWS x COLS grid of (char, colour) cells, or None for empty."""
-    s = model.scale
-    cols = (np.arange(COLS) + 0.5 - COLS / 2) * s
-    rows = (ROWS / 2 - np.arange(ROWS) - 0.5) * s * (CELL_H / CELL_W)
-    u, v = np.meshgrid(cols, rows)
-    origin = np.stack([u.ravel(), v.ravel(), np.full(u.size, -30.0)], axis=1)
-    rot = rotation(yaw, TILT)
-    inv = rot.T
-    o = origin @ inv.T
-    d = np.array([0.0, 0.0, 1.0]) @ inv.T
-    t = np.zeros(len(o))
-    alive = np.ones(len(o), dtype=bool)
-    hit = np.zeros(len(o), dtype=bool)
-    for _ in range(96):
-        p = o[alive] + t[alive, None] * d
-        dist = model.sdf(p)
-        idx = np.flatnonzero(alive)
-        done = dist < 2e-3
-        hit[idx[done]] = True
-        t[idx] += dist
-        alive[idx[done | (t[idx] > 60)]] = False
-        if not alive.any():
-            break
-    grid = [[None] * COLS for _ in range(ROWS)]
-    if not hit.any():
-        return grid
-    hi_idx = np.flatnonzero(hit)
-    p = o[hi_idx] + t[hi_idx, None] * d
-    e = 0.01
-    n = np.stack([model.sdf(p + [e, 0, 0]) - model.sdf(p - [e, 0, 0]),
-                  model.sdf(p + [0, e, 0]) - model.sdf(p - [0, e, 0]),
-                  model.sdf(p + [0, 0, e]) - model.sdf(p - [0, 0, e])], axis=1)
-    n = n / np.linalg.norm(n, axis=1, keepdims=True)
-    n_cam = n @ rot.T
-    to_light = LIGHT_POS - p @ rot.T
-    to_light /= np.linalg.norm(to_light, axis=1, keepdims=True)
-    diffuse = np.clip(np.sum(n_cam * to_light, axis=1), 0.0, 1.0)
-    rim = (1.0 - np.abs(n_cam[:, 2])) ** 2 * 0.18
-    lum = np.clip(0.10 + 0.86 * diffuse + rim, 0.0, 0.999)
-    mat = model.material(p)
-    for k, i in enumerate(hi_idx):
-        r, c = divmod(int(i), COLS)
-        if mat[k] == "eye":
-            continue                      # sockets read as black eyes
-        level = int(lum[k] * len(RAMP))
-        grid[r][c] = (RAMP[level], "h" if level >= 8 else "")
-    return grid
-
-
-def tag(grid, who):
-    """Mark each cell with its character ("a" Clawd, "b" Codex) for dissolves."""
-    return [[(ch, f"{who} {cls}".strip()) if cell else None
-             for cell in row for ch, cls in [cell or (" ", "")]] for row in grid]
-
-
-def dissolve(a, b, steps, seed):
-    rng = random.Random(seed)
-    frames = []
-    for k in range(1, steps + 1):
-        p = k / (steps + 1)
-        noise = 0.38 * math.sin(math.pi * p)
-        g = [[None] * COLS for _ in range(ROWS)]
-        for r in range(ROWS):
-            for c in range(COLS):
-                src = b[r][c] if rng.random() < p else a[r][c]
-                if (src or a[r][c] or b[r][c]) and rng.random() < noise:
-                    src = (rng.choice(RAMP), "n")
-                g[r][c] = src
-        frames.append(g)
-    return frames
-
-
-# === SVG pieces ======================================================================
-
-def frame_group(fid, grid, base, y0):
-    """One frame. The group sets the base colour; tspans mark highlights ("h")
-    and dissolve noise ("n"). Every glyph in a monospace font has the same
-    advance, so rows stay aligned in any font without textLength."""
-    out = [f'<g id="{fid}" class="{base}">']
-    for r, row in enumerate(grid):
-        last = max((c for c, cell in enumerate(row) if cell), default=-1)
-        if last < 0:
-            continue
-        runs, colour, buf = [], None, []
-        for cell in row[: last + 1]:
-            ch, col = cell if cell else (" ", colour)
-            if col != colour and buf:
-                runs.append((colour, "".join(buf)))
-                buf = []
-            colour = col
-            buf.append(ch)
-        runs.append((colour, "".join(buf)))
-        spans = "".join(f'<tspan class="{c}">{escape(t)}</tspan>' if c else escape(t) for c, t in runs)
-        y = y0 + (r + 1) * CELL_H - 3
-        out.append(f'<text y="{y:.0f}">{spans}</text>')
-    out.append("</g>")
-    return "".join(out)
 
 
 def text_width(text, scale, track=1):
@@ -289,149 +450,6 @@ def pixel_text(text, x, y, scale, fill, track=1, anchor="start"):
     return f'<path fill="{fill}" d="{pixel_path(text, round(x), y, scale, track)}"/>', text_width(text, scale, track)
 
 
-def pixel_line(pieces, cx, y, scale, track=1):
-    """Centre several differently coloured pieces on one line. Pieces carry
-    their own spaces, so "takajun" + "02" stays one word."""
-    step = track * scale + scale                  # what text_width trims per piece
-    total = sum(text_width(t.upper(), scale, track) + step for t, _ in pieces) - step
-    x = cx - total / 2
-    out = []
-    for t, fill in pieces:
-        svg, w = pixel_text(t, x, y, scale, fill, track)
-        out.append(svg)
-        x += w + step
-    return "".join(out)
-
-
-def chip(x, y, label, scale=2, dot=None, align="left"):
-    w = text_width(label.upper(), scale) + 24 + (14 if dot else 0)
-    if align == "right":
-        x = x - w
-    body = [f'<rect x="{x}" y="{y}" width="{w:.0f}" height="26" fill="{WINDOW}" stroke="{BORDER}"/>']
-    tx = x + 12
-    if dot:
-        body.append(f'<rect class="live" x="{tx}" y="{y + 10}" width="6" height="6" fill="{dot}"/>')
-        tx += 14
-    body.append(pixel_text(label, tx, y + 8, scale, CREAM)[0])
-    return "".join(body)
-
-
-# === Hero ============================================================================
-
-def build_hero():
-    clawd_open = render(Clawd(), 0.0)
-    clawd_blink = render(Clawd(blink=True), 0.0)
-    codex_on = render(CodexMark(), 0.0)
-    codex_off = render(CodexMark(cursor=False), 0.0)
-    frames = {"a0": clawd_open, "a1": clawd_blink, "b0": codex_on, "b1": codex_off}
-    for i in range(1, SPIN):
-        yaw = 2 * math.pi * i / SPIN
-        frames[f"as{i}"] = render(Clawd(), yaw)
-        frames[f"bs{i}"] = render(CodexMark(), yaw)
-    owner = {fid: ("cb" if fid.startswith("b") else "ca") for fid in frames}
-    # Dissolves keep each cell's own colour: Clawd's cells in clay, Codex's in blue.
-    for i, g in enumerate(dissolve(tag(clawd_open, "a"), tag(codex_on, "b"), DISSOLVE, seed=2)):
-        frames[f"ab{i}"] = g
-        owner[f"ab{i}"] = "cm"
-    for i, g in enumerate(dissolve(tag(codex_on, "b"), tag(clawd_open, "a"), DISSOLVE, seed=5)):
-        frames[f"ba{i}"] = g
-        owner[f"ba{i}"] = "cm"
-
-    def act(front, alt, spin, alt_ticks):
-        seq = [alt if t in alt_ticks else front for t in range(HOLD_FRONT)]
-        seq += [f"{spin}{i}" for i in range(1, SPIN)] + [front] * HOLD_AFTER
-        return seq
-
-    timeline = act("a0", "a1", "as", {6, 7})
-    timeline += [f"ab{i}" for i in range(DISSOLVE)]
-    swap_to_codex = len(timeline) - DISSOLVE // 2
-    timeline += act("b0", "b1", "bs", {4, 5, 6, 7, 8, 9})
-    timeline += [f"ba{i}" for i in range(DISSOLVE)]
-    swap_to_clawd = len(timeline) - DISSOLVE // 2
-    n = len(timeline)
-    period = n * TICK
-    slot_pct = 100 / n
-    p1, p2 = 100 * swap_to_codex / n, 100 * swap_to_clawd / n
-
-    W, H = 960, 664
-    win_w = round(COLS * CELL_W + 36)
-    win_h = 34 + ROWS * CELL_H + 18
-    win_x, win_y = (W - win_w) // 2, 172
-    art_x, art_y = win_x + 18, win_y + 34
-
-    ticker_msgs = ["clawd is moonwalking…", "codex · working (12s • esc to interrupt)",
-                   "tj-02 is counting today's contributions", "clawd is flibbertigibbeting…",
-                   "codex · updated plan · 2/3 complete", "clawd is percolating…"]
-    ticker = "  ·  ".join(ticker_msgs) + "  ·  "
-    tick_w = text_width(ticker.upper(), 2) + (GLYPHS[" "][0] + 1) * 2
-    TICK_X = round(34 + text_width("AGENT ACTIVITY", 2) + 20)
-
-    css = f"""
-.s{{visibility:hidden;animation:tl {period:.2f}s step-end infinite}}
-@keyframes tl{{0%{{visibility:visible}}{slot_pct:.4f}%{{visibility:hidden}}}}
-.ta{{animation:ta {period:.2f}s step-end infinite}}
-@keyframes ta{{0%{{visibility:visible}}{p1:.3f}%{{visibility:hidden}}{p2:.3f}%{{visibility:visible}}}}
-.tb{{visibility:hidden;animation:tb {period:.2f}s step-end infinite}}
-@keyframes tb{{0%{{visibility:hidden}}{p1:.3f}%{{visibility:visible}}{p2:.3f}%{{visibility:hidden}}}}
-.tk{{animation:tk {tick_w / 40:.1f}s linear infinite}}
-@keyframes tk{{to{{transform:translateX(-{tick_w:.0f}px)}}}}
-.live{{animation:lv 1.6s steps(2) infinite}}
-.ca{{fill:{CLAWD_BASE}}}.cb{{fill:{CODEX_BASE}}}.cm{{fill:{DIM}}}
-.ca .h,.a.h{{fill:{CLAWD_HI}}}.cb .h,.b.h{{fill:{CODEX_HI}}}.a{{fill:{CLAWD_BASE}}}.b{{fill:{CODEX_BASE}}}.n{{fill:{DIM}}}
-@keyframes lv{{50%{{opacity:.25}}}}
-text{{font-family:{FONT};font-size:12px;white-space:pre}}
-@media (prefers-reduced-motion:reduce){{.s,.ta,.tb,.tk,.live{{animation:none!important}}#slot0{{visibility:visible}}}}
-"""
-
-    out = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}" width="{W}" height="{H}" xml:space="preserve">',
-           f"<style>{css}</style>",
-           "<defs>",
-           f'<pattern id="dots" width="24" height="24" patternUnits="userSpaceOnUse"><rect x="11" y="11" width="2" height="2" fill="{DOT}"/></pattern>',
-           f'<clipPath id="tclip"><rect x="{TICK_X}" y="{H - 34}" width="{W - TICK_X - 16}" height="34"/></clipPath>']
-    out.append('<g id="frames">')
-    out += [frame_group(fid, g, owner[fid], art_y) for fid, g in frames.items()]
-    out.append("</g>")
-    out.append("</defs>")
-
-    # Card and Git City-style HUD
-    out.append(f'<rect width="{W}" height="{H}" rx="12" fill="{BG}"/>')
-    out.append(f'<rect width="{W}" height="{H}" rx="12" fill="url(#dots)"/>')
-    out.append(chip(20, 20, "akita · jp"))
-    out.append(chip(W - 20, 20, "2 agents live", dot=LIVE, align="right"))
-    out.append(pixel_line([("takajun", CREAM), ("02", CLAY)], W / 2, 62, 6, track=2))
-    out.append(pixel_line([("ai agent architect · software engineer", CREAM)], W / 2, 114, 2))
-    out.append(pixel_line([("pair-programming with ", MUTED), ("claude code", CLAY), (" + ", MUTED), ("codex", CODEX_BASE)], W / 2, 136, 2))
-
-    # Ghostty-style window: hairline border, traffic lights, centred title
-    out.append(f'<rect x="{win_x + 4}" y="{win_y + 4}" width="{win_w}" height="{win_h:.0f}" rx="10" fill="#000" opacity=".45"/>')
-    out.append(f'<rect x="{win_x}" y="{win_y}" width="{win_w}" height="{win_h:.0f}" rx="10" fill="{WINDOW}" stroke="{BORDER}"/>')
-    for i, c in enumerate(("#FF605C", "#FFBD44", "#00CA4E")):
-        out.append(f'<circle cx="{win_x + 18 + i * 20}" cy="{win_y + 17}" r="6" fill="{c}"/>')
-    ty = win_y + 21
-    tfont = "font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif;font-size:12.5px;white-space:pre"
-    out.append(f'<text class="ta" x="{W / 2}" y="{ty}" text-anchor="middle" style="{tfont}" fill="#9C9A92"><tspan fill="{CLAY}">✻</tspan> claude</text>')
-    out.append(f'<text class="tb" x="{W / 2}" y="{ty}" text-anchor="middle" style="{tfont}" fill="#9C9A92"><tspan fill="{CODEX_BASE}">&gt;_</tspan> codex</text>')
-
-    # The animation timeline (a <use> ignores transforms on the <defs> side, so offset here)
-    out.append(f'<g transform="translate({art_x} 0)">')
-    for i, fid in enumerate(timeline):
-        out.append(f'<use id="slot{i}" class="s" href="#{fid}" style="animation-delay:{i * TICK:.2f}s"/>')
-    out.append("</g>")
-
-    # Git City-style activity ticker
-    bar_y = H - 34
-    out.append(f'<path d="M0 {bar_y}H{W}V{H - 12}a12 12 0 0 1 -12 12H12a12 12 0 0 1 -12 -12z" fill="#0F0F0E"/>')
-    out.append(f'<path d="M0 {bar_y}.5H{W}" stroke="{BORDER}"/>')
-    out.append(f'<rect class="live" x="20" y="{bar_y + 14}" width="6" height="6" fill="{LIVE}"/>')
-    out.append(pixel_text("agent activity", 34, bar_y + 12, 2, CREAM)[0])
-    line = pixel_text(ticker, 0, bar_y + 12, 2, MUTED)[0]
-    out.append(f'<g clip-path="url(#tclip)"><g class="tk"><g transform="translate({TICK_X + 8} 0)">{line}</g><g transform="translate({TICK_X + 8 + tick_w:.0f} 0)">{line}</g></g></g>')
-    out.append("</svg>")
-    return "".join(out), len(frames), n, period
-
-
-# === Buttons =========================================================================
-
 def button(label, fill, ink, shadow, border=None):
     scale = 2
     tw = text_width(label.upper(), scale)
@@ -445,13 +463,13 @@ def button(label, fill, ink, shadow, border=None):
 
 
 def main():
-    hero, unique, slots, period = build_hero()
+    hero, height = build_hero()
     OUT_DIR.mkdir(exist_ok=True)
     (OUT_DIR / "hero.svg").write_text(hero, encoding="utf-8")
-    (OUT_DIR / "btn-portfolio.svg").write_text(button("portfolio >", CLAY, BG, CLAY_SHADOW), encoding="utf-8")
-    (OUT_DIR / "btn-x.svg").write_text(button("x  @juntatakahashi0", WINDOW, CREAM, "#000000", border=BORDER), encoding="utf-8")
+    (OUT_DIR / "btn-portfolio.svg").write_text(button("portfolio >", CLAY, BTN_BG, CLAY_SHADOW), encoding="utf-8")
+    (OUT_DIR / "btn-x.svg").write_text(button("x  @juntatakahashi0", BTN_WINDOW, CREAM, "#000000", border=BTN_BORDER), encoding="utf-8")
     kb = (OUT_DIR / "hero.svg").stat().st_size / 1024
-    print(f"hero.svg: {unique} frames, {slots} ticks, {period:.2f}s loop, {kb:.0f} KB")
+    print(f"hero.svg: {W}x{height}, {LOOP} frames a character, {LOOP * TICK:.2f}s loop, {kb:.0f} KB")
 
 
 # Silkscreen by Jason Kottke (SIL Open Font License 1.1), rasterised at 8px.

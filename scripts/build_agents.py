@@ -23,6 +23,7 @@ import json
 import math
 import os
 from concurrent.futures import ProcessPoolExecutor
+from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
@@ -44,19 +45,35 @@ CLAWD_S = 29.0                 # pixels per model unit
 CODEX_S = 28.0
 
 # Timeline, in 31 ms frames. The bob period is ghostty.org's (48 frames, about
-# 1.5 s), and the loop holds a whole number of bobs.
+# 1.5 s), and a loop holds a whole number of bobs.
 BOB_FRAMES = 48
-IDLE = 192                     # each character floats for 4 bobs
-MORPH = 72                     # then turns around and melts into the other
-CLAWD_AT, CODEX_AT = 0, IDLE + MORPH
-N = 2 * (IDLE + MORPH)         # 528 frames, 16.4 s
 BOB_PX = 21.0
-GLANCES = [                    # (centre frame, half-width, yaw, roll): one look-around each
-    (CLAWD_AT + 82, 26, 0.3, 0.05),       # Clawd is a box, so a smaller turn shows its side
-    (CODEX_AT + 96, 26, -0.45, -0.05),
-]
-BLINKS = [CLAWD_AT + 36, CLAWD_AT + 132, CLAWD_AT + 142]
+MORPH = 72                     # frames for one turn while a character melts into the other
 CURSOR_ON, CURSOR_PERIOD = 18, 32
+
+
+@dataclass(frozen=True)
+class Timeline:
+    """What is keyframed over one loop. Mix 0 is Clawd and 1 the Codex mark."""
+    n: int                     # frames in the loop
+    glances: tuple = ()        # (centre frame, half-width, yaw, roll)
+    blinks: tuple = ()         # frames where Clawd blinks
+    melts: tuple = ()          # (start frame, mix before, mix after): a full turn while it melts
+    codex: tuple = ()          # (start, end): where the Codex mark floats; its cursor blinks there
+    phase: float = 0.0         # bob offset in frames
+
+
+# The page: each character floats for 4 bobs, then turns and melts into the other.
+IDLE = 192
+CLAWD_AT, CODEX_AT = 0, IDLE + MORPH
+PAGE = Timeline(
+    n=2 * (IDLE + MORPH),      # 528 frames, 16.4 s
+    glances=((CLAWD_AT + 82, 26, 0.3, 0.05),       # Clawd is a box, so a smaller turn shows its side
+             (CODEX_AT + 96, 26, -0.45, -0.05)),
+    blinks=(CLAWD_AT + 36, CLAWD_AT + 132, CLAWD_AT + 142),
+    melts=((CLAWD_AT + IDLE, 0.0, 1.0), (CODEX_AT + IDLE, 1.0, 0.0)),
+    codex=((CODEX_AT, CODEX_AT + IDLE),),
+)
 
 # Outline: the same gap and band as TJ-02 and ghostty.org's ghost.
 HALO_GAP = 30.0
@@ -69,27 +86,25 @@ def smootherstep(s):
     return s * s * s * (s * (6 * s - 15) + 10)
 
 
-def drive(f):
-    """Everything that is keyframed at frame f (a float): float, glance, turn, morph, blinks."""
-    f = f % N
-    ph = 2 * math.pi * f / BOB_FRAMES
+def drive(f, tl):
+    """Everything that is keyframed at frame f (a float): float, glance, turn, melt, blinks."""
+    n = tl.n
+    f = f % n
+    ph = 2 * math.pi * (f + tl.phase) / BOB_FRAMES
     yaw = roll = 0.0
-    for c, hw, y, r in GLANCES:
-        d = (f - c + N / 2) % N - N / 2
+    for c, hw, y, r in tl.glances:
+        d = (f - c + n / 2) % n - n / 2
         k = float(1 - smoothstep(0.45, 1.0, np.array(abs(d) / hw)))
         yaw, roll = yaw + y * k, roll + r * k
-    mix = 0.0
-    for start, a, b in ((CLAWD_AT + IDLE, 0.0, 1.0), (CODEX_AT + IDLE, 1.0, 0.0)):
+    mix = 1.0 if any(a <= f < b for a, b in tl.codex) else 0.0
+    for start, a, b in tl.melts:
         s = (f - start) / MORPH
         if 0 <= s < 1:
             yaw += 2 * math.pi * smootherstep(s)            # one full turn
             m = float(smoothstep(0.3, 0.7, np.array(s)))      # the shapes melt while it faces away
             mix = a + (b - a) * m
-        elif CODEX_AT <= f < CODEX_AT + IDLE:
-            mix = 1.0
-    blink = any(abs((f - b + N / 2) % N - N / 2) < 1.6 for b in BLINKS)
-    g = f - CODEX_AT
-    cursor = not (0 <= g < IDLE and int(g) % CURSOR_PERIOD >= CURSOR_ON)
+    blink = any(abs((f - b + n / 2) % n - n / 2) < 1.6 for b in tl.blinks)
+    cursor = not any(a <= f < b and int(f - a) % CURSOR_PERIOD >= CURSOR_ON for a, b in tl.codex)
     return {
         "y": BOB_PX * math.sin(ph),
         "stretch": 1 + 0.032 * math.sin(ph),     # longer at the top of a bob, squashed at the bottom
@@ -97,7 +112,7 @@ def drive(f):
     }
 
 
-def simulate():
+def simulate(tl=PAGE):
     """Run the springs for three loops, then record the fourth."""
     sub = 6
     h = DT / sub
@@ -107,12 +122,12 @@ def simulate():
     # The Codex mark's `>_` lags inside the ring.
     inner = Spring(np.zeros(2), 1.3, 0.25)
     leg_phase = np.array([0, math.pi, 0, math.pi] * 2) + np.repeat([0.0, math.pi / 2], 4)
-    prev = drive(0.0)
+    prev = drive(0.0, tl)
     prev_vy = 0.0
     poses = []
-    for frame in range(N * 4):
+    for frame in range(tl.n * 4):
         for s in range(sub):
-            d = drive(frame + s / sub)
+            d = drive(frame + s / sub, tl)
             vy = (d["y"] - prev["y"]) / h
             ay = (vy - prev_vy) / h
             vyaw = ((d["yaw"] - prev["yaw"] + math.pi) % (2 * math.pi) - math.pi) / h
@@ -121,8 +136,8 @@ def simulate():
             flap = float(np.clip(-6.5e-4 * ay, -0.4, 0.4))
             arms.step([flap + 0.5 * d["roll"], flap - 0.5 * d["roll"]], h)
             inner.step(np.clip([-0.25 * vyaw, -9e-4 * ay], -0.6, 0.6), h)
-        if frame >= N * 3:
-            pose = drive(frame)
+        if frame >= tl.n * 3:
+            pose = drive(frame, tl)
             pose.update(legs=legs.x.copy(), arms=arms.x.copy(), inner=inner.x.copy())
             poses.append(pose)
     return poses
@@ -171,7 +186,7 @@ class Clawd(Body):
     HALF_D = 3.5
 
     def __init__(self, pose, mix):
-        super().__init__(pose, CLAWD_S)
+        super().__init__(pose, CLAWD_S * pose.get("scale", 1.0))
         self.legs = pose["legs"]
         self.arms = pose["arms"]
         # Eyes close for a blink, and while Clawd melts into the Codex mark.
@@ -223,7 +238,7 @@ class Codex(Body):
     RING = 7.25
 
     def __init__(self, pose):
-        super().__init__(pose, CODEX_S)
+        super().__init__(pose, CODEX_S * pose.get("scale", 1.0))
         self.ox, self.oy = pose["inner"]
         self.cursor = pose["cursor"]
 
@@ -368,17 +383,22 @@ def show(frame, mix):
     print(frame)
 
 
+def render_all(poses):
+    """Render many poses on all cores."""
+    with ProcessPoolExecutor(max_workers=os.cpu_count()) as pool:
+        return list(pool.map(render, poses, chunksize=8))
+
+
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("--show", type=int, help="print this frame and stop")
     args = ap.parse_args()
     poses = simulate()
     if args.show is not None:
-        pose = poses[args.show % N]
+        pose = poses[args.show % PAGE.n]
         show(render(pose), pose["mix"])
         return
-    with ProcessPoolExecutor(max_workers=os.cpu_count()) as pool:
-        frames = list(pool.map(render, poses, chunksize=8))
+    frames = render_all(poses)
     OUT.parent.mkdir(exist_ok=True)
     body = ",\n".join(json.dumps(f, ensure_ascii=False) for f in frames)
     mix = ",".join(f"{p['mix']:.3g}" for p in poses)

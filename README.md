@@ -1,6 +1,6 @@
 <div align="center">
 
-<a href="https://takajun02.com/"><img src="./assets/hero.svg" width="100%" alt="TakaJun02. AI agent architect and software engineer, pair-programming with Claude Code and Codex. In a terminal window, Clawd from Claude Code and the Codex mark take turns spinning in 3D, drawn in ASCII."></a>
+<a href="https://takajun02.com/"><img src="./assets/hero.svg" width="100%" alt="TAKAJUN02 in Claude Code-style block letters. AI agent architect and software engineer. In a terminal window, Clawd from Claude Code floats at the bottom left and the Codex mark at the bottom right, drawn in ASCII, either side of a Claude Code-style welcome box."></a>
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="./assets/typing-dark.svg">
