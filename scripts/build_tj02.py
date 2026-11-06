@@ -20,6 +20,7 @@ Preview one frame in the terminal:        python3 scripts/build_tj02.py --show 4
 import argparse
 import json
 import math
+from dataclasses import dataclass
 from pathlib import Path
 
 import numpy as np
@@ -111,6 +112,23 @@ MOUTH_Y, MOUTH_W, MOUTH_DIP, MOUTH_T = -8.5, 7.5, 3.4, 1.45
 DOT_R = 3.0
 
 
+@dataclass(frozen=True)
+class Mood:
+    """How TJ-02 floats and what its face shows. The defaults are the page's;
+    scripts/build_activity_art.py varies them for the Activity window."""
+    bobs: int = BOBS                       # bobs per loop
+    bob: float = BOB                       # amplitude, world units
+    looks: tuple = tuple(LOOKS)
+    blinks: tuple = (0.18, 0.56, 0.62)     # where in the loop it blinks
+    closed: bool = False                   # eyes shut the whole loop
+    smile: float = 1.0                     # how far the mouth dips; 0 is a straight line
+    mouth_w: float = MOUTH_W
+    tilt: float = 0.0                      # a constant roll, for a head that has nodded off
+
+
+PAGE_MOOD = Mood()
+
+
 class Spring:
     """A damped spring that chases a target: the source of all the lag and wobble."""
 
@@ -126,10 +144,10 @@ class Spring:
         return self.x
 
 
-def look(u):
-    """Yaw and roll from the two look-arounds, eased in, held, eased out."""
+def look(u, looks=tuple(LOOKS)):
+    """Yaw and roll from the look-arounds, eased in, held, eased out."""
     yaw = roll = 0.0
-    for c, hw, y, r in LOOKS:
+    for c, hw, y, r in looks:
         d = (u - c + 0.5) % 1.0 - 0.5
         x = abs(d) / hw
         k = float(1 - smoothstep(0.45, 1.0, np.array(x)))
@@ -137,25 +155,26 @@ def look(u):
     return yaw, roll
 
 
-def drive(t):
+def drive(t, mood=PAGE_MOOD):
     """The head's own motion at time t (seconds): float, breathe, glance, blink."""
     u = (t / (FRAMES * DT)) % 1.0
     ph = 2 * math.pi * u
-    yaw, roll = look(u)
+    yaw, roll = look(u, mood.looks)
     return {
-        "pos": np.array([0.0, BOB * math.sin(BOBS * ph), 0.0]),
-        "yaw": yaw, "roll": roll,
-        "stretch": 1 + 0.032 * math.sin(BOBS * ph),       # longer at the top of a bob, squashed at the bottom
-        "blink": min(abs((u - b + 0.5) % 1.0 - 0.5) for b in (0.18, 0.56, 0.62)) * FRAMES < 1.6,
+        "pos": np.array([0.0, mood.bob * math.sin(mood.bobs * ph), 0.0]),
+        "yaw": yaw, "roll": roll + mood.tilt,
+        "stretch": 1 + 0.032 * math.sin(mood.bobs * ph),  # longer at the top of a bob, squashed at the bottom
+        "blink": any(abs((u - b + 0.5) % 1.0 - 0.5) * FRAMES < 1.6 for b in mood.blinks),
+        "closed": mood.closed, "smile": mood.smile, "mouth_w": mood.mouth_w,
         "ph": ph,
     }
 
 
-def simulate():
+def simulate(mood=PAGE_MOOD):
     """Run the springs for three loops, then record one loop of poses."""
     sub = 6
     h = DT / sub
-    d0 = drive(0.0)
+    d0 = drive(0.0, mood)
     # The body follows the head closely, so the robot moves as one piece; the
     # antenna and the legs are the loose ends, like the ghost's hem.
     body = Spring(d0["pos"], 2.6, 0.6)
@@ -168,7 +187,7 @@ def simulate():
     for frame in range(FRAMES * 4):
         for s in range(sub):
             t = (frame * sub + s) * h
-            d = drive(t)
+            d = drive(t, mood)
             vel = (d["pos"] - prev_head) / h
             acc = (vel - prev_vel) / h
             prev_head, prev_vel = d["pos"], vel
@@ -178,10 +197,10 @@ def simulate():
             tip.step([-0.05 * acc[0] - 7.0 * d["roll"], -0.022 * acc[1]], h)
             # Legs dangle from the body: they swing against its sideways motion and paddle a little.
             swing = -0.012 * body.v[0] - 0.9 * bt[1]
-            paddle = 0.2 * math.sin(BOBS * d["ph"] - 1.2)
+            paddle = 0.2 * math.sin(mood.bobs * d["ph"] - 1.2)
             legs.step([swing + paddle, swing - paddle], h)
         if frame >= FRAMES * 3:
-            d = drive(frame * DT)
+            d = drive(frame * DT, mood)
             poses.append({
                 "head": d, "body": body.x.copy(), "body_turn": body_turn.x.copy(),
                 "tip": tip.x.copy(), "legs": legs.x.copy(),
@@ -198,6 +217,9 @@ class Figure:
         self.sy = head["stretch"]
         self.sxz = 1 / math.sqrt(self.sy)
         self.blink = head["blink"]
+        self.closed = head.get("closed", False)
+        self.smile = head.get("smile", 1.0)
+        self.mouth_w = head.get("mouth_w", MOUTH_W)
         self.bc = np.array([0.0, BODY_Y, 0.0]) + body
         self.bm = rot(body_turn[0], body_turn[1])
         # Antenna: base on top of the head, tip bent by the spring, both in head space.
@@ -245,16 +267,18 @@ class Figure:
         hx, hy, hz = to_local(x, y, z, self.hc, self.hm)
         hx, hy = hx / self.sxz, hy / self.sy
         front = (part == 0) & (hz < 0)
-        ry = EYE_RY * (0.14 if self.blink else 1.0)
+        # A blink is a slit; eyes shut for good are a thicker line, so they
+        # still show when the robot is drawn small.
+        ry = EYE_RY * (0.4 if self.closed else 0.14 if self.blink else 1.0)
         for sx in (-1, 1):
             eye = ((hx - sx * EYE_X) / EYE_RX) ** 2 + ((hy - EYE_Y) / ry) ** 2 < 1
             white[front & eye] = 0
             cheek = (hx - sx * CHEEK_X) ** 2 + (hy - CHEEK_Y) ** 2 < CHEEK_R ** 2
             accent[front & cheek] = 0.62
             white[front & cheek] = 0
-        mx = np.clip(hx / MOUTH_W, -1, 1)
-        curve = MOUTH_Y - MOUTH_DIP * (1 - mx * mx)
-        ends = np.abs(hx) - MOUTH_W
+        mx = np.clip(hx / self.mouth_w, -1, 1)
+        curve = MOUTH_Y - MOUTH_DIP * self.smile * (1 - mx * mx)
+        ends = np.abs(hx) - self.mouth_w
         mouth = np.sqrt(np.maximum(ends, 0) ** 2 + (hy - np.where(ends > 0, MOUTH_Y, curve)) ** 2) < MOUTH_T
         white[front & mouth] = 0
         bx, by, bz = to_local(x, y, z, self.bc, self.bm)
@@ -277,10 +301,15 @@ def sample_grid():
 GX, GY = sample_grid()
 
 
-def render(pose):
+def render(pose, scale=1.0, halo=1.0):
+    """One frame as text. `scale` draws the robot smaller on the same grid;
+    the outline keeps its gap and width in pixels, as the README hero's do,
+    times `halo`."""
     head = pose["head"]
     fig = Figure(head, pose["body"], pose["body_turn"], pose["tip"], pose["legs"])
-    x, y = GX.ravel(), GY.ravel()
+    gxs, gys = (GX, GY) if scale == 1.0 else (GX / scale, GY / scale)
+    halo_gap, halo_w = HALO_GAP * halo / scale, HALO_W * halo / scale
+    x, y = gxs.ravel(), gys.ravel()
     white = np.zeros_like(x)
     accent = np.zeros_like(x)
 
@@ -320,21 +349,22 @@ def render(pose):
     # Outline: distance from the silhouette of this same pose, read as the
     # minimum of the field over depth slices, on a rectangle of samples so its
     # gradient tells top/bottom edges from side edges.
-    r0 = max(0, int(np.searchsorted(-GY[:, 0], -(fig.hc[1] + 58))))
-    r1 = min(GY.shape[0], int(np.searchsorted(-GY[:, 0], -(fig.hc[1] - 80))))
-    c0 = max(0, int(np.searchsorted(GX[0], fig.hc[0] - 62)))
-    c1 = min(GX.shape[1], int(np.searchsorted(GX[0], fig.hc[0] + 62)))
-    bx, by = GX[r0:r1, c0:c1], GY[r0:r1, c0:c1]
+    pad = (halo_gap + halo_w) - (HALO_GAP + HALO_W)     # the outline reaches further when drawn small
+    r0 = max(0, int(np.searchsorted(-gys[:, 0], -(fig.hc[1] + 58 + pad))))
+    r1 = min(gys.shape[0], int(np.searchsorted(-gys[:, 0], -(fig.hc[1] - 80 - pad))))
+    c0 = max(0, int(np.searchsorted(gxs[0], fig.hc[0] - 62 - pad)))
+    c1 = min(gxs.shape[1], int(np.searchsorted(gxs[0], fig.hc[0] + 62 + pad)))
+    bx, by = gxs[r0:r1, c0:c1], gys[r0:r1, c0:c1]
     dist = np.full(bx.shape, 1e9)
     for z in np.linspace(-34, 34, 18):
         dist = np.minimum(dist, fig.blob(bx, by, np.full_like(bx, z)))
-    gy, gx = np.gradient(dist, CHAR_H / SUB_Y / PX, CHAR_W / SUB_X / PX)
+    gy, gx = np.gradient(dist, CHAR_H / SUB_Y / PX / scale, CHAR_W / SUB_X / PX / scale)
     upright = gy * gy / np.maximum(gx * gx + gy * gy, 1e-9)       # 1 on top/bottom edges, 0 on sides
     band = np.zeros(GX.shape)
     flat = np.zeros(GX.shape)
     # Along the top and bottom the band is a little thicker, so it fills a row
     # like the ghost's bright top edge does.
-    inside = (dist >= HALO_GAP) & (dist < HALO_GAP + HALO_W * (1 + 0.45 * upright))
+    inside = (dist >= halo_gap) & (dist < halo_gap + halo_w * (1 + 0.45 * upright))
     band[r0:r1, c0:c1] = inside
     flat[r0:r1, c0:c1] = inside * upright
     band = band.ravel() * ~covered

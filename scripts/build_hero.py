@@ -23,40 +23,22 @@ What it draws, inside a Ghostty-style terminal window
 How it animates
 - Every frame of a character is one <text>. CSS shows it for exactly one tick
   (step-end), so the loop plays at the page's frame rate.
-- GitHub shows README SVGs as images, so web fonts cannot load. The text uses
-  a subset of JetBrains Mono embedded as a data URI (scripts/fonts, SIL Open
-  Font License 1.1). Its 0.6 em advance keeps the ASCII cells on the grid.
+- The window, the font, the frames, the spinner and the shimmer come from
+  scripts/terminal.py, which the Activity window shares.
 - prefers-reduced-motion shows the first frame and stops the shimmers and the spinner.
 """
 
 from __future__ import annotations
 
-import base64
-import math
-
-import numpy as np
 from pathlib import Path
-from xml.sax.saxutils import escape
 
+from terminal import (CLAUDE, CLAUDE_SHIMMER, CODEX, CREAM, INNER_FONT, MUTED, SPINNER,
+                      TEXT, TICK, WHITE, crop, fmt, font_css, frame_group, shimmer, spans, spinner,
+                      text, window)
 from build_agents import BODY_CELLS, LINE_CELLS, Timeline, render_all, simulate
-from build_tj02 import DT, RAMP
 
 ROOT = Path(__file__).resolve().parent.parent
 OUT_DIR = ROOT / "assets"
-FONT_FILE = Path(__file__).resolve().parent / "fonts" / "JetBrainsMono-Regular-subset.woff2"
-# The subset holds printable ASCII plus these. To add a character, subset
-# JetBrains Mono again with fontTools' pyftsubset and add it here.
-FONT_CHARS = {chr(c) for c in range(0x20, 0x7F)} | set("·…•")
-
-# --- Palette: ghostty.org's greys, Claude Code's clay, Codex's blue -----------------
-BG = "#0F0F11"
-BORDER = "#4C4C50"
-TEXT = "#C3C3C4"
-MUTED = "#828286"
-WHITE = "#FFFFFF"
-CLAUDE, CLAUDE_SHIMMER = "#D77757", "#EB9F7F"   # Claude Code: claude / claudeShimmer
-CODEX = "#63A8F8"
-CREAM = "#E8E6DE"              # this profile's own cream, for the title
 
 # --- Layout ----------------------------------------------------------------------------
 W = 1000
@@ -70,7 +52,6 @@ SCALE = 0.75                   # of docs/agents.html's characters
 
 # --- Timeline ----------------------------------------------------------------------------
 LOOP = 240                     # frames: 5 of ghostty.org's 1.5 s bobs, 7.44 s, as long as its loop
-TICK = DT
 # Each character turns around once a loop, as on docs/agents.html, while the
 # other floats and glances its way.
 CLAWD_TL = Timeline(n=LOOP, glances=((50, 26, 0.3, 0.05),), blinks=(30, 110, 120, 228),
@@ -85,11 +66,6 @@ LOGO_TEXT = "TAKAJUN02"
 SLASHED_ZERO = (6, "....../..##../.#..#./.#.##./.##.#./..##../......")
 # srizzon's drop-in: each column falls 3 pixels and overshoots, 30 ms after the last.
 DROP_START, DROP_STEP, DROP_TIME = 0.43, 0.03, 0.35
-
-
-def fmt(v):
-    s = f"{v:.2f}".rstrip("0").rstrip(".")
-    return "0" if s == "-0" else s
 
 
 # === The logo ===========================================================================
@@ -130,145 +106,13 @@ def logo_svg(x0, y0):
     return svg, len(cols) * LOGO_PX, 5 * LOGO_PX
 
 
-# === Claude Code's spinner glyphs ==========================================================
-
-def rotated(points, a):
-    ca, sa = math.cos(a), math.sin(a)
-    return [(x * ca - y * sa, x * sa + y * ca) for x, y in points]
-
-
-def teardrops(n, r, w):
-    d = []
-    for k in range(n):
-        (ax, ay), (bx, by) = rotated([(r - w, -w), (r - w, w)], -math.pi / 2 + 2 * math.pi * k / n)
-        d.append(f"M0 0L{fmt(ax)} {fmt(ay)}A{fmt(w)} {fmt(w)} 0 1 1 {fmt(bx)} {fmt(by)}Z")
-    return "".join(d)
-
-
-def spokes(n, r, t):
-    d = []
-    for k in range(n):
-        pts = rotated([(0, -t), (r, -t), (r, t), (0, t)], -math.pi / 2 + 2 * math.pi * k / n)
-        d.append("M" + "L".join(f"{fmt(x)} {fmt(y)}" for x, y in pts) + "Z")
-    return "".join(d)
-
-
-def star(n, r, inner):
-    pts = []
-    for k in range(2 * n):
-        a = -math.pi / 2 + math.pi * k / n
-        rr = r if k % 2 == 0 else inner
-        pts.append((rr * math.cos(a), rr * math.sin(a)))
-    return "M" + "L".join(f"{fmt(x)} {fmt(y)}" for x, y in pts) + "Z"
-
-
-SPINNER = [                    # · ✢ ✳ ✶ ✻ ✽, drawn about the origin in a 12 px cell
-    "M-1.6 0a1.6 1.6 0 1 0 3.2 0a1.6 1.6 0 1 0 -3.2 0z",
-    teardrops(4, 5.4, 1.5),
-    spokes(8, 5.4, 0.6),
-    star(6, 5.6, 2.4),
-    teardrops(8, 5.6, 1.25),
-    teardrops(8, 5.8, 1.8),
-]
-
 # === The characters ========================================================================
-
-def crop(frames):
-    """Cut the loop down to the box that every frame fits in."""
-    grids = [f.split("\n") for f in frames]
-    used = [(r, row) for g in grids for r, row in enumerate(g) if row.strip()]
-    top, bottom = min(r for r, _ in used), max(r for r, _ in used)
-    left = min(len(row) - len(row.lstrip()) for _, row in used)
-    right = max(len(row) for _, row in used)
-    return [[row[left:] for row in g[top:bottom + 1]] for g in grids], right - left, bottom - top + 1
-
-
-# Frames are laid out at 10 px and scaled down to ART_FONT, so every column
-# lands on a whole number (0.6 em = 6 units) and the file stays smaller.
-INNER_FONT = 10
-INNER_CW, INNER_CH, INNER_BASE = 6, 13.2, 10.2
-
-
-def layer(rows, cells):
-    """One colour of a frame: a tspan per stretch of each row. Gaps shorter
-    than a tspan's markup stay as spaces; the font is monospace."""
-    out = []
-    for r, row in enumerate(rows):
-        line = "".join(RAMP[cells.index(ch)] if ch in cells else " " for ch in row)
-        runs, c = [], 0
-        while c < len(line):
-            if line[c] == " ":
-                c += 1
-                continue
-            s = c
-            while c < len(line) and line[c] != " ":
-                c += 1
-            if runs and s - runs[-1][1] < 20:
-                runs[-1][1] = c
-            else:
-                runs.append([s, c])
-        for k, (s, e) in enumerate(runs):
-            y = f' y="{fmt(r * INNER_CH + INNER_BASE)}"' if k == 0 else ""
-            out.append(f'<tspan x="{s * INNER_CW}"{y}>{line[s:e]}</tspan>')
-    return "".join(out)
-
-
-def frame_group(rows, cls, fid, delay):
-    """One frame: the character in its colour and the outline in white."""
-    return (f'<g id="{fid}" class="f" style="animation-delay:{delay:.3f}s">'
-            f'<text class="{cls}">{layer(rows, BODY_CELLS)}</text>'
-            f'<text class="o">{layer(rows, LINE_CELLS)}</text></g>')
-
 
 def character(frames, cls, prefix, x, y):
     rows, _, _ = crop(frames)
-    body = "".join(frame_group(g, cls, f"{prefix}{i}", i * TICK) for i, g in enumerate(rows))
+    body = "".join(frame_group(g, [(BODY_CELLS, cls), (LINE_CELLS, "o")], f"{prefix}{i}", "f", i * TICK)
+                   for i, g in enumerate(rows))
     return f'<g transform="translate({fmt(x)} {fmt(y)}) scale({fmt(ART_FONT / INNER_FONT)})">{body}</g>'
-
-# === Text ==================================================================================
-
-def text(x, y, s, size, fill, anchor=None, extra=""):
-    assert set(s) <= FONT_CHARS, set(s) - FONT_CHARS
-    a = f' text-anchor="{anchor}"' if anchor else ""
-    return f'<text x="{fmt(x)}" y="{fmt(y)}" font-size="{fmt(size)}" fill="{fill}"{a}{extra}>{escape(s)}</text>'
-
-
-def spans(x, y, pieces, size):
-    """Several coloured pieces on one line, laid out on the monospace grid."""
-    out, cw = [], size * 0.6
-    for s, fill in pieces:
-        if s.strip():
-            out.append(text(x, y, s, size, fill))
-        x += len(s) * cw
-    return "".join(out)
-
-
-def shimmer(cid, x, y, s, size, fill, glow, period, width=3, step=0.07):
-    """Claude Code's shimmer: a few cells of a lighter colour stepping across
-    the text one cell at a time, then a pause."""
-    cw = size * 0.6
-    steps = len(s) + width
-    run = steps * step
-    pct = 100 * run / period
-    css = (f".{cid}{{animation:{cid} {period:g}s infinite}}"
-           f"@keyframes {cid}{{0%{{transform:translateX(0);animation-timing-function:steps({steps},end)}}"
-           f"{pct:.2f}%,100%{{transform:translateX({fmt(steps * cw)}px)}}}}")
-    svg = (text(x, y, s, size, fill) +
-           f'<clipPath id="{cid}c">{text(x, y, s, size, fill)}</clipPath>'
-           f'<g clip-path="url(#{cid}c)"><rect class="{cid}" x="{fmt(x - width * cw)}" y="{fmt(y - size)}" '
-           f'width="{fmt(width * cw)}" height="{fmt(size * 1.4)}" fill="{glow}"/></g>')
-    return svg, css
-
-
-def spinner(cx, cy, scale, fill):
-    out = [f'<g transform="translate({fmt(cx)} {fmt(cy)}) scale({fmt(scale)})" fill="{fill}">']
-    seq = list(range(len(SPINNER))) + list(reversed(range(len(SPINNER))))
-    for k, g in enumerate(seq):
-        out.append(f'<path id="sp{k}" class="sp" d="{SPINNER[g]}" style="animation-delay:{k * SPIN_STEP:.2f}s"/>')
-    out.append("</g>")
-    css = (f".sp{{visibility:hidden;animation:sp {len(seq) * SPIN_STEP:.2f}s step-end infinite}}"
-           f"@keyframes sp{{0%{{visibility:visible}}{100 / len(seq):.4f}%{{visibility:hidden}}}}")
-    return "".join(out), css
 
 # === Hero ==================================================================================
 
@@ -294,8 +138,7 @@ def build_hero():
     status_y = art_top + art_h + 30
 
     css = [
-        f'@font-face{{font-family:J;src:url(data:font/woff2;base64,{base64.b64encode(FONT_FILE.read_bytes()).decode()}) format("woff2")}}',
-        "text{font-family:J,ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;white-space:pre}",
+        font_css(),
         f".f{{font-size:{INNER_FONT}px;visibility:hidden;animation:f {LOOP * TICK:.3f}s step-end infinite}}",
         f"@keyframes f{{0%{{visibility:visible}}{100 / LOOP:.4f}%{{visibility:hidden}}}}",
         f".c{{fill:{CLAUDE}}}.x{{fill:{CODEX}}}.o{{fill:{TEXT}}}",
@@ -304,14 +147,7 @@ def build_hero():
     ]
     out = []
 
-    # Ghostty-style window: hairline border, traffic lights, centred title.
-    out.append(f'<rect x=".5" y=".5" width="{W - 1}" height="{H - 1}" rx="12" fill="{BG}" stroke="{BORDER}"/>')
-    for i, c in enumerate(("#FF605C", "#FFBD44", "#00CA4E")):
-        out.append(f'<circle cx="{20 + i * 20}" cy="19" r="6" fill="{c}"/>')
-    title = "takajun02"
-    tx = W / 2 - (len(title) + 2) * 13 * 0.6 / 2
-    out.append(f'<path transform="translate({fmt(tx + 4)} 18.5) scale(0.62)" fill="{CLAUDE}" d="{SPINNER[4]}"/>')
-    out.append(text(tx + 2 * 13 * 0.6, 23, title, 13, MUTED))
+    out.append(window(W, H, "takajun02"))
 
     # TAKAJUN02.
     out.append(logo_svg(round((W - logo_w) / 2), LOGO_Y)[0])
