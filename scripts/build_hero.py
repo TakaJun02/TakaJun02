@@ -8,13 +8,14 @@ Needs numpy, for the characters (through build_agents.py). The CI workflow
 never runs it, because the hero does not depend on activity data.
 
 What it draws, inside a Ghostty-style terminal window
-- TAKAJUN02 in figlet's ANSI Shadow letters, the way Claude Code prints its
-  own name: clay blocks with a box-drawing shadow, and Claude Code's shimmer
-  stepping across them one column at a time.
+- TAKAJUN02 in pixel letters of this repository's own, built as blocks with
+  depth and drawn in ASCII by the same rules as the characters: cream faces,
+  and sides that shade from clay over Clawd to blue over the Codex mark.
 - Clawd at the bottom left and the Codex mark at the bottom right, floating as
   on docs/agents.html: the same renderer (scripts/build_agents.py), the same
   31 ms frames and outline, at three quarters of the page's size, which is
-  ghostty.org's own resolution for its ghost. Both are fan art.
+  ghostty.org's own resolution for its ghost. Each turns around once a loop,
+  as they do on the page, one after the other. Both are fan art.
 - Between them, a Claude Code-style welcome box. Under each character, its
   tool's status line: Claude Code's spinner (· ✢ ✳ ✶ ✻ ✽) and Codex's
   "Working", each with its shimmer.
@@ -25,13 +26,15 @@ How it animates
 - GitHub shows README SVGs as images, so web fonts cannot load. The text uses
   a subset of JetBrains Mono embedded as a data URI (scripts/fonts, SIL Open
   Font License 1.1). Its 0.6 em advance keeps the ASCII cells on the grid.
-- prefers-reduced-motion shows the first frame and stops the shimmers.
+- prefers-reduced-motion shows the first frame and stops the shimmers and the spinner.
 """
 
 from __future__ import annotations
 
 import base64
 import math
+
+import numpy as np
 from pathlib import Path
 from xml.sax.saxutils import escape
 
@@ -53,14 +56,13 @@ MUTED = "#828286"
 WHITE = "#FFFFFF"
 CLAUDE, CLAUDE_SHIMMER = "#D77757", "#EB9F7F"   # Claude Code: claude / claudeShimmer
 CODEX = "#63A8F8"
+CREAM = "#E8E6DE"              # this profile's own cream, for the logo's faces
 
 # --- Layout ----------------------------------------------------------------------------
 W = 1000
-LOGO_CW, LOGO_CH = 11, 22      # one terminal cell of the logo
-LOGO_Y = 62
-LINE_T, LINE_GAP = 1.5, 2.5    # box-drawing stroke, and half the gap of its double lines
-TAGLINE_Y = 236
-ART_TOP = 262                  # the characters' boxes start here
+LOGO_Y = 64
+LOGO_PX = 3, 1                 # one pixel of the logo's letters, in ASCII cells (columns, rows)
+LOGO_DEPTH = 2, 1              # how far the blocks reach back, in cells: right and down
 ART_FONT = 8.0                 # px; cells are 0.6 em wide and 1.32 em tall, as on the page
 CELL_W, CELL_H = ART_FONT * 0.6, ART_FONT * 1.32
 UI_FONT = 11.0                 # px, for the welcome box and the status lines
@@ -68,22 +70,29 @@ UI_CW = UI_FONT * 0.6
 SCALE = 0.75                   # of docs/agents.html's characters
 
 # --- Timeline ----------------------------------------------------------------------------
-LOOP = 192                     # frames: 4 of ghostty.org's 1.5 s bobs, 5.95 s
+LOOP = 240                     # frames: 5 of ghostty.org's 1.5 s bobs, 7.44 s, as long as its loop
 TICK = DT
-CLAWD_TL = Timeline(n=LOOP, glances=((82, 26, 0.3, 0.05),), blinks=(36, 132, 142))
-CODEX_TL = Timeline(n=LOOP, glances=((150, 26, -0.45, -0.05),), codex=((0, LOOP),),
+# Each character turns around once a loop, as on docs/agents.html, while the
+# other floats and glances its way.
+CLAWD_TL = Timeline(n=LOOP, glances=((50, 26, 0.3, 0.05),), blinks=(30, 110, 120, 228),
+                    turns=((140, 1),))
+CODEX_TL = Timeline(n=LOOP, glances=((180, 26, -0.45, -0.05),), codex=((0, LOOP),),
+                    turns=((20, -1),),
                     phase=24)      # half a bob: it rises while Clawd sinks
 SPIN_STEP = 0.12               # s per spinner glyph, forwards then backwards
 
-# figlet's ANSI Shadow font, "TAKAJUN02".
-BANNER = (
-    "████████╗ █████╗ ██╗  ██╗ █████╗      ██╗██╗   ██╗███╗   ██╗ ██████╗ ██████╗",
-    "╚══██╔══╝██╔══██╗██║ ██╔╝██╔══██╗     ██║██║   ██║████╗  ██║██╔═████╗╚════██╗",
-    "   ██║   ███████║█████╔╝ ███████║     ██║██║   ██║██╔██╗ ██║██║██╔██║ █████╔╝",
-    "   ██║   ██╔══██║██╔═██╗ ██╔══██║██   ██║██║   ██║██║╚██╗██║████╔╝██║██╔═══╝",
-    "   ██║   ██║  ██║██║  ██╗██║  ██║╚█████╔╝╚██████╔╝██║ ╚████║╚██████╔╝███████╗",
-    "   ╚═╝   ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝ ╚════╝  ╚═════╝ ╚═╝  ╚═══╝ ╚═════╝ ╚══════╝",
-)
+# The logo's letters: 6 x 9 pixels with 2-pixel stems, drawn for this hero.
+LETTERS = {
+    "T": ("######", "######", "..##..", "..##..", "..##..", "..##..", "..##..", "..##..", "..##.."),
+    "A": (".####.", "######", "##..##", "##..##", "######", "######", "##..##", "##..##", "##..##"),
+    "K": ("##..##", "##..##", "##.##.", "####..", "###...", "####..", "##.##.", "##..##", "##..##"),
+    "J": ("..####", "..####", "....##", "....##", "....##", "....##", "##..##", "######", ".####."),
+    "U": ("##..##", "##..##", "##..##", "##..##", "##..##", "##..##", "##..##", "######", ".####."),
+    "N": ("##..##", "###.##", "###.##", "######", "######", "##.###", "##.###", "##..##", "##..##"),
+    "0": (".####.", "######", "##..##", "##.###", "######", "###.##", "##..##", "######", ".####."),
+    "2": (".####.", "######", "##..##", "...###", "..###.", ".###..", "###...", "######", "######"),
+}
+LOGO_TEXT = "TAKAJUN02"
 
 
 def fmt(v):
@@ -91,70 +100,86 @@ def fmt(v):
     return "0" if s == "-0" else s
 
 
-def rect_d(x, y, w, h):
-    return f"M{fmt(x)} {fmt(y)}h{fmt(w)}v{fmt(h)}h{fmt(-w)}z"
-
-
 # === The logo ===========================================================================
 
-def box_segments(ch, x0, y0):
-    """A box-drawing character as thin rectangles (x, y, w, h), drawn the way a
-    terminal draws them: double lines centred in the cell."""
-    x1, y1 = x0 + LOGO_CW, y0 + LOGO_CH
-    cx, cy = x0 + LOGO_CW / 2, y0 + LOGO_CH / 2
-    t, d = LINE_T, LINE_GAP
-    h = lambda xa, xb, y: (xa, y - t / 2, xb - xa, t)
-    v = lambda x, ya, yb: (x - t / 2, ya, t, yb - ya)
-    if ch == "═":
-        return [h(x0, x1, cy - d), h(x0, x1, cy + d)]
-    if ch == "║":
-        return [v(cx - d, y0, y1), v(cx + d, y0, y1)]
-    if ch == "╗":     # left and down
-        return [h(x0, cx + d + t / 2, cy - d), v(cx + d, cy - d - t / 2, y1),
-                h(x0, cx - d + t / 2, cy + d), v(cx - d, cy + d - t / 2, y1)]
-    if ch == "╔":     # right and down
-        return [h(cx - d - t / 2, x1, cy - d), v(cx - d, cy - d - t / 2, y1),
-                h(cx + d - t / 2, x1, cy + d), v(cx + d, cy + d - t / 2, y1)]
-    if ch == "╝":     # left and up
-        return [h(x0, cx + d + t / 2, cy + d), v(cx + d, y0, cy + d + t / 2),
-                h(x0, cx - d + t / 2, cy - d), v(cx - d, y0, cy - d + t / 2)]
-    if ch == "╚":     # right and up
-        return [h(cx - d - t / 2, x1, cy + d), v(cx - d, y0, cy + d + t / 2),
-                h(cx + d - t / 2, x1, cy - d), v(cx + d, y0, cy - d + t / 2)]
-    raise ValueError(ch)
+def logo_cells():
+    """TAKAJUN02 as blocks with depth, drawn in ASCII cells.
 
+    Every cell is sampled 3 x 6 times. A sample sees a block's front face, or,
+    looking back along the depth, the side of the first block it runs into:
+    a right side if it crossed a column of pixels to get there, a bottom side
+    if it crossed a row. Cells then pick glyphs by coverage, as the characters do.
+    Returns rows of "F"+level (front), "S"+level (side) or "  " per cell.
+    """
+    rows = [".".join(LETTERS[ch][r] for ch in LOGO_TEXT) for r in range(9)]
+    mask = np.array([[c == "#" for c in row] for row in rows])
+    ph, pw = mask.shape
+    px, py = LOGO_PX[0] * CELL_W, LOGO_PX[1] * CELL_H
+    ex, ey = LOGO_DEPTH[0] * CELL_W, LOGO_DEPTH[1] * CELL_H
+    cols = pw * LOGO_PX[0] + LOGO_DEPTH[0]
+    nrows = ph * LOGO_PX[1] + LOGO_DEPTH[1]
+    sx, sy = 3, 6
+    xs = (np.arange(cols * sx) + 0.5) * CELL_W / sx
+    ys = (np.arange(nrows * sy) + 0.5) * CELL_H / sy
+    X, Y = np.meshgrid(xs, ys)
 
-def merge(rects):
-    """Join rectangles that continue each other along a row or a column."""
-    rects = sorted(set((round(x, 3), round(y, 3), round(w, 3), round(h, 3)) for x, y, w, h in rects))
+    def lookup(x, y):
+        ix, iy = np.floor(x / px).astype(int), np.floor(y / py).astype(int)
+        ok = (ix >= 0) & (ix < pw) & (iy >= 0) & (iy < ph)
+        hit = np.zeros(x.shape, bool)
+        hit[ok] = mask[iy[ok], ix[ok]]
+        return hit, ix
+
+    front, last_ix = lookup(X, Y)
+    seen = front.copy()
+    right = np.zeros(X.shape, bool)
+    bottom = np.zeros(X.shape, bool)
+    for k in range(1, 49):
+        t = k / 48
+        hit, ix = lookup(X - t * ex, Y - t * ey)
+        new = hit & ~seen
+        right |= new & (ix != last_ix)
+        bottom |= new & (ix == last_ix)
+        seen |= new
+        last_ix = ix
+
+    def cells(v):
+        return v.reshape(nrows, sy, cols, sx).mean(axis=(1, 3))
+    cf, cr, cb = cells(front), cells(right), cells(bottom)
     out = []
-    for r in sorted(rects, key=lambda r: (r[1], r[3], r[0])):        # along rows
-        if out and out[-1][1] == r[1] and out[-1][3] == r[3] and abs(out[-1][0] + out[-1][2] - r[0]) < 0.01:
-            px, py, pw, ph = out.pop()
-            r = (px, py, pw + r[2], ph)
-        out.append(r)
-    rows, out = out, []
-    for r in sorted(rows, key=lambda r: (r[0], r[2], r[1])):         # then along columns
-        if out and out[-1][0] == r[0] and out[-1][2] == r[2] and abs(out[-1][1] + out[-1][3] - r[1]) < 0.01:
-            px, py, pw, ph = out.pop()
-            r = (px, py, pw, ph + r[3])
-        out.append(r)
-    return out
+    for r in range(nrows):
+        row = []
+        for c in range(cols):
+            lum = 15 + 240 * 0.972 * cf[r, c]
+            side = cr[r, c] + cb[r, c]
+            if lum >= 168:
+                row.append(("F", min(9, int((lum - 165) * 9 / 90))))
+            elif side >= 0.3:
+                level = 6 if cb[r, c] >= cr[r, c] else 5      # bottoms catch more light than right sides
+                row.append(("S", max(0, level - round((1 - min(1, side / 0.75)) * 3))))
+            else:
+                row.append(None)
+        out.append(row)
+    return out, cols * CELL_W, nrows * CELL_H
 
 
-def logo(x0, y0):
-    """The banner as two paths: the blocks and their box-drawing shadow."""
-    blocks, lines = [], []
-    for r, row in enumerate(BANNER):
-        for c, ch in enumerate(row):
-            x, y = x0 + c * LOGO_CW, y0 + r * LOGO_CH
-            if ch == "█":
-                blocks.append((x, y, LOGO_CW, LOGO_CH))
-            elif ch != " ":
-                lines += box_segments(ch, x, y)
-    # A hair of overlap, so neighbouring blocks never show a seam when scaled.
-    blocks = [(x, y, w + 0.35, h + 0.35) for x, y, w, h in merge(blocks)]
-    return "".join(rect_d(*b) for b in blocks), "".join(rect_d(*b) for b in merge(lines))
+def logo_svg(x0, y0):
+    """The logo's cells as text: the faces in cream, the sides in a gradient."""
+    grid, w, h = logo_cells()
+    layers = []
+    for kind, cls in (("F", "lf"), ("S", "ls")):
+        spans = []
+        for r, row in enumerate(grid):
+            line = "".join(RAMP[cell[1]] if cell and cell[0] == kind else " " for cell in row).rstrip()
+            lead = len(line) - len(line.lstrip())
+            if line.strip():
+                spans.append(f'<tspan x="{lead * INNER_CW}" y="{fmt(r * INNER_CH + INNER_BASE)}">{line.strip()}</tspan>')
+        layers.append(f'<text class="{cls}">{"".join(spans)}</text>')
+    k = ART_FONT / INNER_FONT
+    gradient = (f'<linearGradient id="lg" gradientUnits="userSpaceOnUse" x1="0" y1="0" x2="{fmt(w / k)}" y2="0">'
+                f'<stop offset=".15" stop-color="{CLAUDE}"/><stop offset=".85" stop-color="{CODEX}"/></linearGradient>')
+    return (gradient + f'<g transform="translate({fmt(x0)} {fmt(y0)}) scale({fmt(k)})" font-size="{INNER_FONT}">'
+            + "".join(layers) + "</g>"), w, h
 
 
 # === Claude Code's spinner glyphs ==========================================================
@@ -310,19 +335,22 @@ def build_hero():
     clawd_w, clawd_h = clawd_w * CELL_W, clawd_h * CELL_H
     codex_w, codex_h = codex_w * CELL_W, codex_h * CELL_H
     art_h = max(clawd_h, codex_h)
-    H = round(ART_TOP + art_h + 62)
-    art_mid = ART_TOP + art_h / 2
+    logo, logo_w, logo_h = logo_svg(0, 0)
+    tagline_y = LOGO_Y + logo_h + 36
+    art_top = tagline_y + 26
+    H = round(art_top + art_h + 62)
+    art_mid = art_top + art_h / 2
     clawd_cx, codex_cx = 188, 814
     clawd_x, clawd_y = clawd_cx - clawd_w / 2, art_mid - clawd_h / 2
     codex_x, codex_y = codex_cx - codex_w / 2, art_mid - codex_h / 2
-    status_y = ART_TOP + art_h + 30
+    status_y = art_top + art_h + 30
 
     css = [
         f'@font-face{{font-family:J;src:url(data:font/woff2;base64,{base64.b64encode(FONT_FILE.read_bytes()).decode()}) format("woff2")}}',
         "text{font-family:J,ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;white-space:pre}",
         f".f{{font-size:{INNER_FONT}px;visibility:hidden;animation:f {LOOP * TICK:.3f}s step-end infinite}}",
         f"@keyframes f{{0%{{visibility:visible}}{100 / LOOP:.4f}%{{visibility:hidden}}}}",
-        f".c{{fill:{CLAUDE}}}.x{{fill:{CODEX}}}.o{{fill:{TEXT}}}",
+        f".c{{fill:{CLAUDE}}}.x{{fill:{CODEX}}}.o{{fill:{TEXT}}}.lf{{fill:{CREAM}}}.ls{{fill:url(#lg)}}",
     ]
     out = []
 
@@ -335,21 +363,10 @@ def build_hero():
     out.append(f'<path transform="translate({fmt(tx + 4)} 18.5) scale(0.62)" fill="{CLAUDE}" d="{SPINNER[4]}"/>')
     out.append(text(tx + 2 * 13 * 0.6, 23, title, 13, MUTED))
 
-    # TAKAJUN02, with the shimmer stepping across it.
-    cols = max(map(len, BANNER))
-    lx = round((W - cols * LOGO_CW) / 2)
-    blocks, lines = logo(lx, LOGO_Y)
-    out.append(f'<path id="lb" fill="{CLAUDE}" d="{blocks}"/>')
-    out.append(f'<path id="ll" fill="{CLAUDE}" fill-opacity=".62" d="{lines}"/>')
-    band = 3
-    steps = cols + band
-    css.append(f".ls{{animation:ls 5s infinite}}@keyframes ls{{0%{{transform:translateX(0);"
-               f"animation-timing-function:steps({steps},end)}}{100 * steps * 0.045 / 5:.2f}%,100%{{transform:translateX({steps * LOGO_CW}px)}}}}")
-    out.append('<clipPath id="lc"><use href="#lb"/><use href="#ll"/></clipPath>')
-    out.append(f'<g clip-path="url(#lc)"><rect class="ls" x="{lx - band * LOGO_CW}" y="{LOGO_Y}" '
-               f'width="{band * LOGO_CW}" height="{len(BANNER) * LOGO_CH + 1}" fill="{CLAUDE_SHIMMER}"/></g>')
+    # TAKAJUN02.
+    out.append(logo_svg((W - logo_w) / 2, LOGO_Y)[0])
 
-    out.append(text(W / 2, TAGLINE_Y, "AI agent architect · software engineer", 16, TEXT, anchor="middle"))
+    out.append(text(W / 2, tagline_y, "AI agent architect · software engineer", 16, TEXT, anchor="middle"))
 
     # Clawd and the Codex mark.
     out.append(character(clawd, "c", "c", clawd_x, clawd_y))
@@ -396,10 +413,10 @@ def build_hero():
     css.append(word_css)
     out.append(spans(b_x + (2 + len(b_word)) * UI_CW, status_y, [(b_rest, MUTED)], UI_FONT))
 
-    css.append("@media (prefers-reduced-motion:reduce){.f,.sp,.ls,.s1,.s2{animation:none!important}"
+    css.append("@media (prefers-reduced-motion:reduce){.f,.sp,.s1,.s2{animation:none!important}"
                "#c0,#x0,#sp8{visibility:visible}}")
     svg = [f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {W} {H}" width="{W}" height="{H}" xml:space="preserve">',
-           "<!-- TAKAJUN02 in figlet's ANSI Shadow font. Clawd (Claude Code, Anthropic) and the Codex mark (OpenAI)\n"
+           "<!-- TAKAJUN02 in this repository's own pixel letters. Clawd (Claude Code, Anthropic) and the Codex mark (OpenAI)\n"
            "     are fan art, rendered by scripts/build_agents.py after ghostty.org's terminal animation\n"
            "     (github.com/ghostty-org/website, MIT). Text is set in a subset of JetBrains Mono,\n"
            "     Copyright 2020 The JetBrains Mono Project Authors, SIL Open Font License 1.1. -->",

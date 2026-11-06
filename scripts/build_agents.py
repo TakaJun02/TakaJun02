@@ -59,6 +59,7 @@ class Timeline:
     glances: tuple = ()        # (centre frame, half-width, yaw, roll)
     blinks: tuple = ()         # frames where Clawd blinks
     melts: tuple = ()          # (start frame, mix before, mix after): a full turn while it melts
+    turns: tuple = ()          # (start frame, +1 or -1): a full turn on its own, no melt
     codex: tuple = ()          # (start, end): where the Codex mark floats; its cursor blinks there
     phase: float = 0.0         # bob offset in frames
 
@@ -103,6 +104,10 @@ def drive(f, tl):
             yaw += 2 * math.pi * smootherstep(s)            # one full turn
             m = float(smoothstep(0.3, 0.7, np.array(s)))      # the shapes melt while it faces away
             mix = a + (b - a) * m
+    for start, way in tl.turns:
+        s = (f - start) / MORPH
+        if 0 <= s < 1:
+            yaw += way * 2 * math.pi * smootherstep(s)
     blink = any(abs((f - b + n / 2) % n - n / 2) < 1.6 for b in tl.blinks)
     cursor = not any(a <= f < b and int(f - a) % CURSOR_PERIOD >= CURSOR_ON for a, b in tl.codex)
     return {
