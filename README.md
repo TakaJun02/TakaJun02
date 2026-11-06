@@ -1,25 +1,18 @@
 <div align="center">
 
-```text
-╔═══════════════════════════════════════════════════════════════════════════════════╗
-║                                                                                   ║
-║   ████████╗ █████╗ ██╗  ██╗ █████╗      ██╗██╗   ██╗███╗   ██╗ ██████╗ ██████╗    ║
-║   ╚══██╔══╝██╔══██╗██║ ██╔╝██╔══██╗     ██║██║   ██║████╗  ██║██╔═████╗╚════██╗   ║
-║      ██║   ███████║█████╔╝ ███████║     ██║██║   ██║██╔██╗ ██║██║██╔██║ █████╔╝   ║
-║      ██║   ██╔══██║██╔═██╗ ██╔══██║██   ██║██║   ██║██║╚██╗██║████╔╝██║██╔═══╝    ║
-║      ██║   ██║  ██║██║  ██╗██║  ██║╚█████╔╝╚██████╔╝██║ ╚████║╚██████╔╝███████╗   ║
-║      ╚═╝   ╚═╝  ╚═╝╚═╝  ╚═╝╚═╝  ╚═╝ ╚════╝  ╚═════╝ ╚═╝  ╚═══╝ ╚═════╝ ╚══════╝   ║
-║                                                                                   ║
-║                      AI Agent Architect / Software Engineer                       ║
-║                                                                                   ║
-╚═══════════════════════════════════════════════════════════════════════════════════╝
-```
+<a href="https://takajun02.com/"><img src="./assets/hero.svg" width="100%" alt="TakaJun02. AI agent architect and software engineer, pair-programming with Claude Code and Codex. In a terminal window, Clawd from Claude Code and the Codex mark take turns spinning in 3D, drawn in ASCII."></a>
 
 <picture>
   <source media="(prefers-color-scheme: dark)" srcset="./assets/typing-dark.svg">
   <source media="(prefers-color-scheme: light)" srcset="./assets/typing-light.svg">
   <img src="./assets/typing-light.svg" width="640" alt="Building AI Agents with LLMs; Engineering RAG Systems; Turning AI into Practical Solutions; Convincing my agent the task is done">
 </picture>
+
+<p>
+<a href="https://takajun02.com/"><img src="./assets/btn-portfolio.svg" height="48" alt="Portfolio"></a>&nbsp;&nbsp;<a href="https://x.com/JuntaTakahashi0"><img src="./assets/btn-x.svg" height="48" alt="X: @JuntaTakahashi0"></a>
+</p>
+
+<sub>Clawd (Claude Code) and the Codex mark are fan art. Not affiliated with Anthropic or OpenAI.</sub>
 
 </div>
 
