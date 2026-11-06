@@ -1,0 +1,259 @@
+<!doctype html>
+<!--
+  TJ-02 floating in a terminal.
+
+  The layout, the terminal window and the frame player follow the ghostty.org
+  homepage (https://github.com/ghostty-org/website), used under the MIT License:
+
+  Copyright (c) 2024 Ghostty
+
+  Permission is hereby granted, free of charge, to any person obtaining a copy
+  of this software and associated documentation files (the "Software"), to deal
+  in the Software without restriction, including without limitation the rights
+  to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
+  copies of the Software, and to permit persons to whom the Software is
+  furnished to do so, subject to the following conditions:
+
+  The above copyright notice and this permission notice shall be included in all
+  copies or substantial portions of the Software.
+
+  THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+  IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+  FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+  AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+  LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
+  OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
+  SOFTWARE.
+
+  TJ-02 and the frames in frames.js are this repository's own
+  (rendered by scripts/build_tj02.py).
+-->
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>TakaJun02</title>
+<meta name="description" content="TakaJun02 builds AI agents and RAG systems, pair-programming with Claude Code and Codex.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400&display=swap">
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-std.min.css">
+<style>
+* { box-sizing: border-box; padding: 0; margin: 0; }
+::selection { background: color-mix(in srgb, var(--brand-color) 60%, transparent); }
+html { color-scheme: dark; }
+html, body {
+  max-width: 100vw;
+  /* ghostty.org's greys; the brand colour is TJ-02's clay instead of Ghostty blue */
+  --brand-color: #D97757;
+  --brand-color-hsl: 15 63% 60%;
+  --gray-0: #0F0F11;
+  --gray-1: #16161A;
+  --gray-2: #242428;
+  --gray-3: #4C4C50;
+  --gray-4: #828286;
+  --gray-5: #959597;
+  --gray-6: #c3c3c4;
+  --gray-7: #dbdbdc;
+  --gray-8: #eaeaeb;
+  --gray-9: #F0F0F4;
+  --white: #fff;
+  background: var(--gray-0);
+}
+body { font-family: "Pretendard Std Variable", "Pretendard Std", -apple-system, BlinkMacSystemFont, system-ui, sans-serif; }
+a { color: var(--gray-9); }
+
+.homePage {
+  padding: 32px 0;
+  min-height: 100vh;
+  min-height: 100dvh;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+}
+.terminalWrapper { margin-bottom: 20px; display: grid; place-content: center; overflow: hidden; }
+.gridContainer { position: relative; width: 100%; margin-left: auto; margin-right: auto; padding: 0 16px; }
+.tagline {
+  text-align: center;
+  color: var(--gray-5);
+  margin-bottom: 20px;
+  font-size: 16px;
+  line-height: 1.4em;
+  font-weight: 400;
+}
+.buttonsList { display: flex; gap: 20px; justify-content: center; flex-wrap: wrap; }
+
+.buttonLink {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  text-decoration: none;
+  font-weight: 400;
+  border: 1px solid var(--button-color);
+  border-radius: 6px;
+  transition: background-color 0.15s;
+}
+.buttonLink.brand { --button-color: var(--brand-color); }
+.buttonLink.neutral { --button-color: var(--gray-3); }
+.buttonLink:hover { background-color: var(--button-color); text-decoration: none; }
+.buttonLink.large { font-size: 16px; padding: 10px 34px; }
+
+/* The terminal window */
+.terminal {
+  --code-margin-top: 12px;
+  --padding: 7px;
+  --control-size: 12px;
+  width: calc((var(--columns) * var(--content-character-width)) + (2 * var(--padding)) + 2px);
+  height: calc((var(--rows) * var(--content-character-height)) + (2 * var(--padding)) + var(--control-size) + var(--code-margin-top));
+  background: var(--gray-0);
+  border: 1px solid var(--gray-3);
+  border-radius: 10px;
+  display: flex;
+  flex-direction: column;
+}
+.terminal.fontXTiny { --title-font-size: 12px; --content-font-size: 6px; --content-character-width: 3.6px; --content-character-height: 9px; }
+.terminal.fontTiny { --title-font-size: 14px; --content-font-size: 10px; --content-character-width: 6px; --content-character-height: 13.8px; }
+.terminal.fontSmall { --title-font-size: 14px; --content-font-size: 12px; --content-character-width: 7.2px; --content-character-height: 16.6px; }
+.terminal .header {
+  display: grid;
+  align-items: center;
+  position: relative;
+  border-radius: 9px 9px 0 0;
+  padding: var(--padding) 11px;
+  grid-template: "start title end";
+  grid-template-columns: 1fr 1fr 1fr;
+}
+.terminal .windowControls { list-style: none; display: flex; gap: 8px; justify-content: start; grid-area: start; }
+.terminal .windowControls li { width: var(--control-size); height: var(--control-size); border-radius: var(--control-size); }
+.terminal .windowControls li:nth-child(1) { background: #ff605c; }
+.terminal .windowControls li:nth-child(2) { background: #ffbd44; }
+.terminal .windowControls li:nth-child(3) { background: #00ca4e; }
+.terminal .title {
+  text-align: center;
+  font-size: var(--title-font-size);
+  grid-area: title;
+  color: var(--gray-4);
+  line-height: 1.4em;
+  font-weight: 400;
+  white-space: nowrap;
+}
+.terminal .content {
+  display: block;
+  font-family: "JetBrains Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+  font-size: var(--content-font-size);
+  color: var(--gray-6);
+  word-wrap: break-word;
+  overflow-y: hidden;
+  padding: var(--padding);
+}
+.terminal .content > div { white-space: pre-wrap; }
+.terminal .content .b { color: var(--brand-color); }
+</style>
+</head>
+<body>
+<main class="homePage">
+  <section class="terminalWrapper" aria-hidden="true">
+    <div class="terminal fontSmall" id="terminal">
+      <div class="header">
+        <ul class="windowControls"><li></li><li></li><li></li></ul>
+        <p class="title">🤖 TJ-02</p>
+      </div>
+      <code class="content" id="screen"></code>
+    </div>
+  </section>
+
+  <div class="gridContainer">
+    <p class="tagline">TakaJun02 builds AI agents and RAG systems, pair-programming with Claude Code and Codex.</p>
+  </div>
+
+  <div class="gridContainer buttonsList">
+    <a class="buttonLink brand large" href="https://takajun02.com/">Portfolio</a>
+    <a class="buttonLink neutral large" href="https://github.com/TakaJun02">GitHub</a>
+  </div>
+</main>
+
+<script src="frames.js" charset="utf-8"></script>
+<script>
+(() => {
+  const COLUMNS = 100, ROWS = 41, FRAME_MS = 31, FIRST_FRAME = 16;
+  const RAMP = "·~ox+=*%$@";
+  const terminal = document.getElementById("terminal");
+  const screen = document.getElementById("screen");
+
+  // Frames come as plain rows; accent cells are A-J. Turn them into the same
+  // markup ghostty.org ships: one <div> per row, accent runs in <span class="b">.
+  const accentRun = /[A-J]+/g;
+  const toRamp = (run) => '<span class="b">' + [...run].map((c) => RAMP[c.charCodeAt(0) - 65]).join("") + "</span>";
+  let padding = "";
+  let cache = [];
+  function html(i) {
+    if (!cache[i]) {
+      cache[i] = window.TJ02_FRAMES[i].split("\n").map((row) =>
+        "<div>" + padding + row.padEnd(COLUMNS).replace(accentRun, toRamp) + padding + "</div>"
+      ).join("");
+    }
+    return cache[i];
+  }
+
+  // Pick the font size and side padding from the window size, as ghostty.org does.
+  function layout() {
+    const w = window.innerWidth, h = window.innerHeight;
+    const widthSize = w > 1100 ? "small" : w > 674 ? "tiny" : "xtiny";
+    const heightSize = h > 900 ? "small" : h > 750 ? "tiny" : "xtiny";
+    let size = "small";
+    for (const s of ["xtiny", "tiny", "small"]) {
+      if (widthSize === s || heightSize === s) { size = s; break; }
+    }
+    terminal.className = "terminal " + { xtiny: "fontXTiny", tiny: "fontTiny", small: "fontSmall" }[size];
+    const pad = w > 950 ? 20 : w > 850 ? 10 : 0;
+    terminal.style.setProperty("--columns", COLUMNS + 2 * pad);
+    terminal.style.setProperty("--rows", ROWS);
+    if (padding.length !== pad) { padding = " ".repeat(pad); cache = []; }
+  }
+
+  let current = FIRST_FRAME;
+  const draw = () => { screen.innerHTML = html(current); };
+  layout();
+  draw();
+  window.addEventListener("resize", () => { layout(); draw(); });
+
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return;
+
+  // A fixed-step loop on requestAnimationFrame: frames stay in step with time.
+  const baseFps = 1000 / FRAME_MS;
+  let frameTime = 1000 / baseFps, raf = null, last = -1;
+  function update(time) {
+    if (last === -1) {
+      last = time;
+    } else {
+      let delta = time - last;
+      while (delta >= frameTime) {
+        current = (current + 1) % window.TJ02_FRAMES.length;
+        delta -= frameTime;
+        last += frameTime;
+      }
+      draw();
+    }
+    raf = requestAnimationFrame(update);
+  }
+  const start = () => { if (raf == null) raf = requestAnimationFrame(update); };
+  const pause = () => { if (raf != null) { cancelAnimationFrame(raf); raf = null; last = -1; } };
+  window.addEventListener("focus", start);
+  window.addEventListener("blur", pause);
+  if (document.visibilityState === "visible") start();
+
+  // ↑↑↓↓←→←→BA toggles 240 fps.
+  const KONAMI = ["arrowup", "arrowup", "arrowdown", "arrowdown", "arrowleft", "arrowright", "arrowleft", "arrowright", "b", "a"];
+  const typed = [];
+  window.addEventListener("keyup", (e) => {
+    const key = e.key.toLowerCase();
+    if (KONAMI[typed.length] === key) typed.push(key); else typed.length = 0;
+    if (typed.length !== KONAMI.length) return;
+    frameTime = frameTime === 1000 / baseFps ? 1000 / 240 : 1000 / baseFps;
+    typed.length = 0;
+  });
+})();
+</script>
+</body>
+</html>
