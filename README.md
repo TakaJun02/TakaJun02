@@ -76,23 +76,7 @@
 
 ### ⚡ Activity
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/TakaJun02/TakaJun02/output/overview-dark.svg">
-  <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/TakaJun02/TakaJun02/output/overview-light.svg">
-  <img src="https://raw.githubusercontent.com/TakaJun02/TakaJun02/output/overview-light.svg" width="100%" alt="Activity overview: the share of commits, pull requests, code review and issues over the past year, drawn as a radar">
-</picture>
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/TakaJun02/TakaJun02/output/snake-dark.svg">
-  <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/TakaJun02/TakaJun02/output/snake-light.svg">
-  <img src="https://raw.githubusercontent.com/TakaJun02/TakaJun02/output/snake-light.svg" width="100%" alt="A snake eating my GitHub contribution graph">
-</picture>
-
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="https://raw.githubusercontent.com/TakaJun02/TakaJun02/output/activity-dark.svg">
-  <source media="(prefers-color-scheme: light)" srcset="https://raw.githubusercontent.com/TakaJun02/TakaJun02/output/activity-light.svg">
-  <img src="https://raw.githubusercontent.com/TakaJun02/TakaJun02/output/activity-light.svg" width="100%" alt="An animated Claude Code-style session where TJ-02, a small agent whose mood follows my contributions, reports today's activity, the year as a context window, and an omikuji">
-</picture>
+<img src="https://raw.githubusercontent.com/TakaJun02/TakaJun02/output/activity.svg" width="100%" alt="My activity in a terminal window, drawn in ASCII. The share of commits, pull requests, code review and issues over the past year as bars and a radar; the contribution calendar, eaten by a snake; and a Claude Code-style session where TJ-02, a small robot whose mood follows my contributions, reports today's activity, the year as a context window, and an omikuji.">
 
 ---
 
