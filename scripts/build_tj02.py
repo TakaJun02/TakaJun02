@@ -41,13 +41,13 @@ ACCENT = "ABCDEFGHIJ"          # accent glyph levels; the page maps them back in
 # Motion
 BOBS = 5                       # bobs per loop (about 1.5 s each, like the ghost)
 BOB = 4.3                      # bob amplitude, world units
-LOOKS = [(0.30, 0.13, 0.55, 0.10), (0.73, 0.10, -0.42, -0.08)]  # (centre, half-width, yaw, roll) as loop fractions / radians
+LOOKS = [(0.20, 0.10, 0.45, 0.05)]  # (centre, half-width, yaw, roll): one glance per loop, like the ghost's lean
 
-# Outline (the halo around the ghost): gap from the body and band width, world units.
-HALO_GAP, HALO_W, HALO_PEAK = 5.2, 2.9, 0.72
-
-V = np.array
-
+# Outline, measured from ghostty.org's frames: it keeps a fixed gap of 4 columns
+# from the body and is 2 columns wide (`==` at the sides, `**` along the top and
+# bottom). It is part of the same pose, so it moves exactly with the body.
+HALO_GAP = 30.0 / PX           # 30 px, a little over 4 columns
+HALO_W = 14.4 / PX             # 2 columns
 
 # === Small vector helpers ============================================================
 
@@ -138,14 +138,12 @@ def look(u):
 
 
 def drive(t):
-    """The head's own motion at time t (seconds): float, drift, breathe, look."""
+    """The head's own motion at time t (seconds): float, breathe, glance, blink."""
     u = (t / (FRAMES * DT)) % 1.0
     ph = 2 * math.pi * u
     yaw, roll = look(u)
-    yaw += 0.09 * math.sin(ph + 1.0)
-    roll += 0.035 * math.sin(2 * ph + 0.3)
     return {
-        "pos": np.array([1.3 * math.sin(ph + 0.4), BOB * math.sin(BOBS * ph), 0.0]),
+        "pos": np.array([0.0, BOB * math.sin(BOBS * ph), 0.0]),
         "yaw": yaw, "roll": roll,
         "stretch": 1 + 0.032 * math.sin(BOBS * ph),       # longer at the top of a bob, squashed at the bottom
         "blink": min(abs((u - b + 0.5) % 1.0 - 0.5) for b in (0.18, 0.56, 0.62)) * FRAMES < 1.6,
@@ -158,12 +156,12 @@ def simulate():
     sub = 6
     h = DT / sub
     d0 = drive(0.0)
-    body = Spring(d0["pos"], 0.95, 0.26)
-    body_turn = Spring([d0["yaw"], d0["roll"]], 1.1, 0.45)
+    # The body follows the head closely, so the robot moves as one piece; the
+    # antenna and the legs are the loose ends, like the ghost's hem.
+    body = Spring(d0["pos"], 2.6, 0.6)
+    body_turn = Spring([d0["yaw"], d0["roll"]], 2.6, 0.6)
     tip = Spring([0.0, 0.0], 1.55, 0.14)
     legs = Spring([0.0, 0.0], 1.15, 0.22)
-    halo = Spring(d0["pos"], 0.95, 0.40)
-    halo_turn = Spring([d0["yaw"], d0["roll"]], 0.8, 0.5)
     prev_head = d0["pos"].copy()
     prev_vel = np.zeros(3)
     poses = []
@@ -182,14 +180,11 @@ def simulate():
             swing = -0.012 * body.v[0] - 0.9 * bt[1]
             paddle = 0.2 * math.sin(BOBS * d["ph"] - 1.2)
             legs.step([swing + paddle, swing - paddle], h)
-            halo.step(d["pos"], h)
-            halo_turn.step([d["yaw"], d["roll"]], h)
         if frame >= FRAMES * 3:
             d = drive(frame * DT)
             poses.append({
                 "head": d, "body": body.x.copy(), "body_turn": body_turn.x.copy(),
                 "tip": tip.x.copy(), "legs": legs.x.copy(),
-                "halo": halo.x.copy(), "halo_turn": halo_turn.x.copy(),
             })
     return poses
 
@@ -322,27 +317,36 @@ def render(pose):
     covered = np.zeros_like(x, bool)
     covered[idx[hi]] = True
 
-    # Outline: distance from the lagging, smoothed silhouette, read as the
-    # minimum of the field over depth slices.
-    hpose = dict(head, pos=pose["halo"], yaw=pose["halo_turn"][0], roll=pose["halo_turn"][1])
-    ghost = Figure(hpose, pose["halo"] + (pose["body"] - head["pos"]) * 0.6, pose["halo_turn"], pose["tip"] * 0.5, pose["legs"] * 0.6)
-    band = np.nonzero(~covered & (np.abs(x - ghost.hc[0]) < 60) & (y > ghost.hc[1] - 85) & (y < ghost.hc[1] + 60))[0]
-    bx, by = x[band], y[band]
-    dist = np.full_like(bx, 1e9)
+    # Outline: distance from the silhouette of this same pose, read as the
+    # minimum of the field over depth slices, on a rectangle of samples so its
+    # gradient tells top/bottom edges from side edges.
+    r0 = max(0, int(np.searchsorted(-GY[:, 0], -(fig.hc[1] + 58))))
+    r1 = min(GY.shape[0], int(np.searchsorted(-GY[:, 0], -(fig.hc[1] - 80))))
+    c0 = max(0, int(np.searchsorted(GX[0], fig.hc[0] - 62)))
+    c1 = min(GX.shape[1], int(np.searchsorted(GX[0], fig.hc[0] + 62)))
+    bx, by = GX[r0:r1, c0:c1], GY[r0:r1, c0:c1]
+    dist = np.full(bx.shape, 1e9)
     for z in np.linspace(-34, 34, 18):
-        dist = np.minimum(dist, ghost.blob(bx, by, np.full_like(bx, z)))
-    centre = ghost.hc + np.array([0, -12.0, 0])
-    ang = np.arctan2(by - centre[1], (bx - centre[0]) * 0.8)
-    ph = head["ph"]
-    gap = HALO_GAP + 0.9 * np.sin(3 * ang + 2 * BOBS * ph) + 0.5 * np.sin(5 * ang - 3 * BOBS * ph + 1.0)
-    mid = gap + HALO_W / 2
-    halo = HALO_PEAK * np.clip(1 - ((dist - mid) / (HALO_W / 2)) ** 2, 0, 1)
-    accent[band] = np.maximum(accent[band], halo)
+        dist = np.minimum(dist, fig.blob(bx, by, np.full_like(bx, z)))
+    gy, gx = np.gradient(dist, CHAR_H / SUB_Y / PX, CHAR_W / SUB_X / PX)
+    upright = gy * gy / np.maximum(gx * gx + gy * gy, 1e-9)       # 1 on top/bottom edges, 0 on sides
+    band = np.zeros(GX.shape)
+    flat = np.zeros(GX.shape)
+    # Along the top and bottom the band is a little thicker, so it fills a row
+    # like the ghost's bright top edge does.
+    inside = (dist >= HALO_GAP) & (dist < HALO_GAP + HALO_W * (1 + 0.45 * upright))
+    band[r0:r1, c0:c1] = inside
+    flat[r0:r1, c0:c1] = inside * upright
+    band = band.ravel() * ~covered
+    flat = flat.ravel() * ~covered
 
     # Box-filter the samples into cells, then pick each cell's character the
-    # way the video converter does: white by brightness, accent by strength.
-    w = white.reshape(ROWS, SUB_Y, COLS, SUB_X).mean(axis=(1, 3))
-    a = accent.reshape(ROWS, SUB_Y, COLS, SUB_X).mean(axis=(1, 3))
+    # way the video converter does: white by brightness, accent by strength,
+    # and the outline by how much of the cell it fills.
+    def cells(v):
+        return v.reshape(ROWS, SUB_Y, COLS, SUB_X).mean(axis=(1, 3))
+    w, a, cov = cells(white), cells(accent), cells(band)
+    ori = cells(flat) / np.maximum(cov, 1e-9)
     lum = 15 + 240 * w
     lines = []
     for r in range(ROWS):
@@ -352,6 +356,15 @@ def render(pose):
                 row.append(RAMP[min(9, max(0, int((lum[r, c] - 165) * 9 / 90)))])
             elif a[r, c] >= 0.24:
                 row.append(ACCENT[min(9, max(0, int(a[r, c] * 9.2)))])
+            elif cov[r, c] >= 0.22:
+                # A fully covered cell is `=`; one the band only partly covers
+                # fades through `+ x o ~ ·`, as the ghost's outline does when
+                # it slides across the columns. Top and bottom edges are
+                # brighter (`*`, `%`).
+                level = max(0, round(cov[r, c] * 6) - 1)
+                if ori[r, c] > 0.7:
+                    level += 2 if ori[r, c] > 0.9 and cov[r, c] >= 0.8 else 1
+                row.append(ACCENT[level])
             else:
                 row.append(" ")
         lines.append("".join(row).rstrip())
