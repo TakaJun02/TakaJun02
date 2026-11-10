@@ -44,8 +44,8 @@ from datetime import date
 from pathlib import Path
 from xml.sax.saxutils import escape
 
-from terminal import (BG, BORDER, CLAUDE, CLAUDE_DEEP, CLAUDE_SHIMMER, CODEX, CREAM, GREEN, INNER_FONT, MUTED,
-                      RAMP, TEXT, TICK, WHITE, fmt, font_css, frame_group, frames_css, layer, mark, shimmer, spans,
+from terminal import (BG, BORDER, CLAUDE, CLAUDE_SHIMMER, CODEX, CREAM, INNER_FONT, MUTED, RAMP, TEXT,
+                      TICK, WHITE, fmt, font_css, frame_group, frames_css, layer, mark, shimmer, spans,
                       spinner, text, window)
 
 LOGIN = os.environ.get("GITHUB_REPOSITORY_OWNER", "TakaJun02")
@@ -81,9 +81,10 @@ OMIKUJI = [
     ("凶", "the agent loops; add a stop condition"),
 ]
 
+GREEN = "#4EBA65"              # Claude Code's success colour, for a finished tool call
 # Contribution levels 1-4: denser glyphs in brighter clay. Level 0 is a grey `·`.
 LEVEL_GLYPHS = "o+%@"
-LEVEL_COLOURS = (CLAUDE_DEEP, "#B5603F", CLAUDE, CLAUDE_SHIMMER)
+LEVEL_COLOURS = ("#8E4C35", "#B5603F", "#D77757", "#EB9F7F")
 SNAKE_GLYPHS = "@$%*"          # head to tail
 
 # --- Layout ------------------------------------------------------------------------------

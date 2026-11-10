@@ -32,7 +32,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from terminal import (BG, BORDER, CLAUDE, CLAUDE_DEEP, CLAUDE_SHIMMER, CODEX, CREAM, INNER_FONT, MUTED, SPINNER,
+from terminal import (CLAUDE, CLAUDE_SHIMMER, CODEX, CREAM, INNER_FONT, MUTED, SPINNER,
                       TEXT, TICK, WHITE, crop, fmt, font_css, frame_group, shimmer, spans, spinner,
                       text, window)
 from build_agents import BODY_CELLS, LINE_CELLS, Timeline, render_all, simulate
@@ -211,9 +211,14 @@ def build_hero():
 
 
 # === Buttons ===============================================================================
-# Block buttons with a hard offset, as github.com/srizzon draws its own: the
-# logo's Silkscreen, in the window's colours. Their labels are the commands
-# the welcome box names.
+# The buttons keep the pixel style of the earlier hero.
+
+BTN_BG = "#141413"
+BTN_WINDOW = "#1A1918"
+BTN_BORDER = "#3D3D3A"
+BTN_CREAM = "#E8E6DC"
+CLAY = "#D97757"
+CLAY_SHADOW = "#7A3E28"
 
 
 def text_width(text, scale, track=1):
@@ -264,8 +269,8 @@ def main():
     hero, height = build_hero()
     OUT_DIR.mkdir(exist_ok=True)
     (OUT_DIR / "hero.svg").write_text(hero, encoding="utf-8")
-    (OUT_DIR / "btn-portfolio.svg").write_text(button("/portfolio", CLAUDE, BG, CLAUDE_DEEP), encoding="utf-8")
-    (OUT_DIR / "btn-x.svg").write_text(button("/x  @juntatakahashi0", BG, CREAM, BORDER, border=BORDER), encoding="utf-8")
+    (OUT_DIR / "btn-portfolio.svg").write_text(button("portfolio >", CLAY, BTN_BG, CLAY_SHADOW), encoding="utf-8")
+    (OUT_DIR / "btn-x.svg").write_text(button("x  @juntatakahashi0", BTN_WINDOW, BTN_CREAM, "#000000", border=BTN_BORDER), encoding="utf-8")
     kb = (OUT_DIR / "hero.svg").stat().st_size / 1024
     print(f"hero.svg: {W}x{height}, {LOOP} frames a character, {LOOP * TICK:.2f}s loop, {kb:.0f} KB")
 
