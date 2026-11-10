@@ -1,4 +1,4 @@
-"""The README's terminal look, shared by the hero and the Activity window.
+"""The README's terminal look, shared by the hero, the sections around it and the Activity window.
 
 Standard library only, so the daily Activity job can use it without numpy.
 
@@ -34,8 +34,10 @@ TEXT = "#C3C3C4"
 MUTED = "#828286"
 WHITE = "#FFFFFF"
 CLAUDE, CLAUDE_SHIMMER = "#D77757", "#EB9F7F"   # Claude Code: claude / claudeShimmer
+CLAUDE_DEEP = "#8E4C35"        # clay in shadow: the faintest calendar cell, a button's offset
 CODEX = "#63A8F8"
 CREAM = "#E8E6DE"              # this profile's own cream
+GREEN = "#4EBA65"              # Claude Code's success colour, for a finished tool call
 TRAFFIC = ("#FF605C", "#FFBD44", "#00CA4E")
 
 

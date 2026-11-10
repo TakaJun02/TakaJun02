@@ -2,11 +2,7 @@
 
 <a href="https://takajun02.com/"><img src="./assets/hero.svg" width="100%" alt="TAKAJUN02 in large pixel letters that drop in column by column. AI agent architect and software engineer. In a terminal window, Clawd from Claude Code floats at the bottom left and the Codex mark at the bottom right, each turning around in turn, either side of a Claude Code-style welcome box."></a>
 
-<picture>
-  <source media="(prefers-color-scheme: dark)" srcset="./assets/typing-dark.svg">
-  <source media="(prefers-color-scheme: light)" srcset="./assets/typing-light.svg">
-  <img src="./assets/typing-light.svg" width="640" alt="Building AI Agents with LLMs; Engineering RAG Systems; Turning AI into Practical Solutions; Convincing my agent the task is done">
-</picture>
+<img src="./assets/prompt.svg" width="100%" alt="A Claude Code input box types: Building AI Agents with LLMs; Engineering RAG Systems; Turning AI into Practical Solutions; Convincing my agent the task is done">
 
 <p>
 <a href="https://takajun02.com/"><img src="./assets/btn-portfolio.svg" height="48" alt="Portfolio"></a>&nbsp;&nbsp;<a href="https://x.com/JuntaTakahashi0"><img src="./assets/btn-x.svg" height="48" alt="X: @JuntaTakahashi0"></a>
@@ -16,72 +12,13 @@
 
 </div>
 
----
-
-### 👋 About Me
-
-- 🎓 Graduate student at **Akita Prefectural University**
-- 🤖 Software engineer focused on **LLMs, AI agents, and RAG**
-- 💼 Hands-on industry experience building **RAG-powered AI agents**
-- 🧩 Exploring agent architecture: tool calling, sub-agents, context management, human-in-the-loop
-
----
-
-### 🧰 Tech Stack
-
-### 🤖 AI / LLM
-
-![LangGraph](https://img.shields.io/badge/langgraph-%231C3C3C.svg?style=for-the-badge&logo=langgraph&logoColor=white)
-![LangChain](https://img.shields.io/badge/langchain-%231C3C3C.svg?style=for-the-badge&logo=langchain&logoColor=white)
-![Claude API](https://img.shields.io/badge/claude%20api-%23D97757.svg?style=for-the-badge&logo=claude&logoColor=white)
-![OpenAI API](https://img.shields.io/badge/openai%20api-%23412991.svg?style=for-the-badge)
-![Ollama](https://img.shields.io/badge/ollama-%23000000.svg?style=for-the-badge&logo=ollama&logoColor=white)
-![vLLM](https://img.shields.io/badge/vllm-%2330A2FF.svg?style=for-the-badge&logo=vllm&logoColor=white)
-![RAG](https://img.shields.io/badge/RAG-%2320232a.svg?style=for-the-badge)
-<br/>
-
-### 💻 Languages
-
-![Python](https://img.shields.io/badge/python-3670A0?style=for-the-badge&logo=python&logoColor=ffdd54)
-![TypeScript](https://img.shields.io/badge/typescript-%2320232a.svg?style=for-the-badge&logo=typescript&logoColor=%233178C6)
-![JavaScript](https://img.shields.io/badge/javascript-%23323330.svg?style=for-the-badge&logo=javascript&logoColor=%23F7DF1E)
-<br/>
-
-### 🔧 Backend / Frontend
-
-![FastAPI](https://img.shields.io/badge/FastAPI-005571?style=for-the-badge&logo=fastapi&logoColor=white)
-![Vue.js](https://img.shields.io/badge/vue.js-%2335495e.svg?style=for-the-badge&logo=vuedotjs&logoColor=%234FC08D)
-<br/>
-
-### 🗄️ Databases
-
-![PostgreSQL](https://img.shields.io/badge/postgresql-%23316192.svg?style=for-the-badge&logo=postgresql&logoColor=white)
-![SQLite](https://img.shields.io/badge/sqlite-%2307405e.svg?style=for-the-badge&logo=sqlite&logoColor=white)
-![ChromaDB](https://img.shields.io/badge/chromadb-%23FF6446.svg?style=for-the-badge)
-![Qdrant](https://img.shields.io/badge/qdrant-%23DC244C.svg?style=for-the-badge&logo=qdrant&logoColor=white)
-<br/>
-
-### ☁️ Infrastructure / Tools
-
-![Docker](https://img.shields.io/badge/docker-%230db7ed.svg?style=for-the-badge&logo=docker&logoColor=white)
-![AWS](https://img.shields.io/badge/AWS-%23FF9900.svg?style=for-the-badge)
-![Git](https://img.shields.io/badge/git-%23F05032.svg?style=for-the-badge&logo=git&logoColor=white)
-![GitHub](https://img.shields.io/badge/github-%23121011.svg?style=for-the-badge&logo=github&logoColor=white)
-![Linux](https://img.shields.io/badge/linux-FCC624?style=for-the-badge&logo=linux&logoColor=black)
-![Claude Code](https://img.shields.io/badge/claude%20code-%23D97757.svg?style=for-the-badge&logo=claudecode&logoColor=white)
-![Codex](https://img.shields.io/badge/codex-%23000000.svg?style=for-the-badge)
-<br/>
-
----
-
-### ⚡ Activity
+<img src="./assets/about.svg" width="100%" alt="About me, as a Claude Code session in a terminal window. Graduate student at Akita Prefectural University. Software engineer focused on LLMs, AI agents, and RAG. Hands-on industry experience building RAG-powered AI agents. Exploring agent architecture: tool calling, sub-agents, context management, human-in-the-loop. Beside it, a map of Japan in ASCII marks Akita. Tech stack. AI / LLM: LangGraph, LangChain, Claude API, OpenAI API, Ollama, vLLM, RAG. Languages: Python, TypeScript, JavaScript. Backend / Frontend: FastAPI, Vue.js. Databases: PostgreSQL, SQLite, ChromaDB, Qdrant. Infrastructure / Tools: Docker, AWS, Git, GitHub, Linux, Claude Code, Codex.">
 
 <img src="https://raw.githubusercontent.com/TakaJun02/TakaJun02/output/activity.svg" width="100%" alt="My activity in a terminal window, drawn in ASCII. The share of commits, pull requests, code review and issues over the past year as bars and a radar; the contribution calendar, eaten by a snake; and a Claude Code-style session where TJ-02, a small robot whose mood follows my contributions, reports today's activity, the year as a context window, and an omikuji.">
 
----
-
-### 🔗 Connect
-
-[![GitHub](https://img.shields.io/badge/GitHub-TakaJun02-D97757?style=for-the-badge&logo=github&logoColor=white&labelColor=262624)](https://github.com/TakaJun02)
-[![X](https://img.shields.io/badge/X-%40JuntaTakahashi0-D97757?style=for-the-badge&logo=x&logoColor=white&labelColor=262624)](https://x.com/JuntaTakahashi0)
-[![Portfolio](https://img.shields.io/badge/Portfolio-takajun02.com-D97757?style=for-the-badge&labelColor=262624)](https://takajun02.com/)
+<p>
+<img src="./assets/prompt-slash.svg" width="100%" alt="Connect: a slash typed into a Claude Code input box opens three commands.">
+<a href="https://takajun02.com/"><img src="./assets/cmd-portfolio.svg" width="100%" alt="/portfolio: takajun02.com"></a>
+<a href="https://x.com/JuntaTakahashi0"><img src="./assets/cmd-x.svg" width="100%" alt="/x: @JuntaTakahashi0"></a>
+<a href="https://github.com/TakaJun02"><img src="./assets/cmd-github.svg" width="100%" alt="/github: TakaJun02"></a>
+</p>
