@@ -38,6 +38,13 @@ CODEX = "#63A8F8"
 CREAM = "#E8E6DE"              # this profile's own cream
 TRAFFIC = ("#FF605C", "#FFBD44", "#00CA4E")
 
+# Outside a window, on GitHub's own page colour: ink and accent for each of
+# its themes. The dark pair is the window's own.
+PAGE = {
+    "dark": {"ink": CREAM, "accent": CLAUDE},
+    "light": {"ink": "#1F1E1D", "accent": "#C8643F"},
+}
+
 
 def fmt(v):
     s = f"{v:.2f}".rstrip("0").rstrip(".")
