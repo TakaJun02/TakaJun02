@@ -246,20 +246,21 @@ class Codex(Body):
         super().__init__(pose, CODEX_S * pose.get("scale", 1.0))
         self.ox, self.oy = pose["inner"]
         self.cursor = pose["cursor"]
+        self.stroke = pose.get("stroke", self.STROKE)     # a small mark needs a heavier line to hold a cell
 
     def sdf(self, x, y, z):
         ux, uy, uz = self.local(x, y, z)
-        ring = np.abs(np.hypot(ux, uy) - self.RING) - self.STROKE
+        ring = np.abs(np.hypot(ux, uy) - self.RING) - self.stroke
         ix, iy = ux - self.ox, uy - self.oy
         mark = np.minimum(sd_segment2(ix, iy, (-2.917, 2.083), (-1.77, 0.0)),
                           sd_segment2(ix, iy, (-1.77, 0.0), (-2.917, -2.083)))
         if self.cursor:
             mark = np.minimum(mark, sd_segment2(ix, iy, (0.833, -2.083), (3.333, -2.083)))
-        return extrude(np.minimum(ring, mark - self.STROKE), uz, self.HALF_D) * self.k
+        return extrude(np.minimum(ring, mark - self.stroke), uz, self.HALF_D) * self.k
 
     def blob(self, x, y, z):
         ux, uy, uz = self.local(x, y, z)
-        return extrude(np.hypot(ux, uy) - self.RING - self.STROKE, uz, self.HALF_D) * self.k
+        return extrude(np.hypot(ux, uy) - self.RING - self.stroke, uz, self.HALF_D) * self.k
 
 
 class Scene:
@@ -350,7 +351,9 @@ def render(pose):
         dist = np.minimum(dist, scene.blob(bx, by, np.full_like(bx, z)))
     gy, gx = np.gradient(dist, CHAR_H / SUB_Y, CHAR_W / SUB_X)
     upright = gy * gy / np.maximum(gx * gx + gy * gy, 1e-9)       # 1 on top/bottom edges, 0 on sides
-    inside = (dist >= HALO_GAP) & (dist < HALO_GAP + HALO_W * (1 + 0.45 * upright))
+    # A smaller character can bring its outline in with it: pose["halo"] scales the gap and the band.
+    gap, width = HALO_GAP * pose.get("halo", 1.0), HALO_W * pose.get("halo", 1.0)
+    inside = (dist >= gap) & (dist < gap + width * (1 + 0.45 * upright))
     band = np.zeros(GX.shape)
     flat = np.zeros(GX.shape)
     band[r0:r1, c0:c1] = inside

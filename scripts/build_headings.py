@@ -6,11 +6,12 @@
 Writes assets/h-<name>-dark.svg and assets/h-<name>-light.svg for every
 section, and assets/btn-github.svg. Needs numpy, through build_hero.py.
 
-A heading is the hero's vocabulary at reading size: Claude Code's mark in
-clay, the name in the logo's Silkscreen at its own spacing, as solid square
-pixels, and a short row of pixel dots trailing off after it. It has no
-background, so it comes in GitHub's two themes and README.md picks one with
-<picture>.
+A heading is the hero's vocabulary at reading size: a pixel icon for the
+section, the name in the logo's Silkscreen at its own spacing, as solid square
+pixels, and a short row of pixel dots trailing off after it. At the end of the
+trail stands one of the hero's two characters, flat and from the front
+(terminal.py), taking turns down the page. It has no background, so it comes
+in GitHub's two themes and README.md picks one with <picture>.
 
 A heading is only as wide as its name and is shown at its own size, so its
 pixels stay whole and it reads the same on a phone as on a desktop. (GitHub
@@ -20,36 +21,113 @@ shrink with the column.)
 
 from __future__ import annotations
 
-from terminal import ASTERISK, PAGE, fmt
+from terminal import CLAWD_H, CLAWD_W, CODEX_D, PAGE, clawd_flat, codex_flat, fmt
 from build_hero import OUT_DIR, button, pixel_path, text_width
 
 H = 36
 PX = 4                         # px a pixel of the name: capitals 20 px tall
-TEXT_X, TEXT_Y = 34, 8
+ICON_PX = 2                    # px a pixel of the icon: ten rows, as tall as the capitals
+TEXT_X, TEXT_Y = 36, 8
 DOT, DOT_STEP, DOTS = 2, 8, 12 # the trail: each dot fainter than the last
+WHO_GAP = 12                   # from the trail to the character
 
-HEADINGS = {"about": "About me", "stack": "Tech stack", "activity": "Activity", "connect": "Connect"}
+# Icons on a grid 12 wide and 10 or 11 tall. '#' is ink and 'o' the accent.
+ICONS = {
+    "about": (                 # a person
+        "....oooo....",
+        "...oooooo...",
+        "...oooooo...",
+        "...oooooo...",
+        "....oooo....",
+        "............",
+        "..########..",
+        ".##########.",
+        "############",
+        "############"),
+    "stack": (                 # layers
+        ".....oo.....",
+        "...oooooo...",
+        ".oooooooooo.",
+        "...oooooo...",
+        ".....oo.....",
+        ".##......##.",
+        "...##..##...",
+        ".....##.....",
+        ".##......##.",
+        "...##..##...",
+        ".....##....."),
+    "activity": (              # bars
+        ".........ooo",
+        ".........ooo",
+        ".........ooo",
+        "....###..ooo",
+        "....###..ooo",
+        "....###..ooo",
+        "###.###..ooo",
+        "###.###..ooo",
+        "###.###..ooo",
+        "###.###..ooo"),
+    "connect": (               # a speech bubble
+        ".##########.",
+        "############",
+        "############",
+        "##oo#oo#oo##",
+        "##oo#oo#oo##",
+        "############",
+        "############",
+        ".##########.",
+        "..###.......",
+        "..##........"),
+}
+
+# name: (label, the character at the end of its trail)
+HEADINGS = {"about": ("About me", "codex"), "stack": ("Tech stack", "clawd"),
+            "activity": ("Activity", "codex"), "connect": ("Connect", "clawd")}
 
 
-def heading(label, theme):
-    name = label.upper()
-    end = TEXT_X + text_width(name, PX, track=0)
+def icon(rows, y, theme):
+    out = []
+    for code, fill in (("#", theme["ink"]), ("o", theme["accent"])):
+        d = []
+        for r, row in enumerate(rows):
+            c = 0
+            while c < len(row):
+                if row[c] != code:
+                    c += 1
+                    continue
+                s = c
+                while c < len(row) and row[c] == code:
+                    c += 1
+                d.append(f"M{s * ICON_PX} {y + r * ICON_PX}h{(c - s) * ICON_PX}v{ICON_PX}h{-(c - s) * ICON_PX}z")
+        out.append(f'<path fill="{fill}" d="{"".join(d)}"/>')
+    return "".join(out)
+
+
+def heading(name, label, who, theme):
+    title = label.upper()
+    end = round(TEXT_X + text_width(title, PX, track=0))
     base = TEXT_Y + 5 * PX
-    w = round(end) + 16 + DOTS * DOT_STEP
-    dots = "".join(f'<rect x="{round(end) + 16 + i * DOT_STEP}" y="{base - DOT}" width="{DOT}" height="{DOT}" '
+    dots = "".join(f'<rect x="{end + 16 + i * DOT_STEP}" y="{base - DOT}" width="{DOT}" height="{DOT}" '
                    f'opacity="{fmt(1 - i / DOTS)}"/>' for i in range(DOTS))
+    x = end + 16 + DOTS * DOT_STEP + WHO_GAP
+    if who == "clawd":             # standing on the baseline
+        figure, w = clawd_flat(x, base - CLAWD_H * 2, 2, theme["accent"]), x + CLAWD_W * 2
+    else:
+        u = 22 / CODEX_D
+        figure, w = codex_flat(x + 11, base - 11, u, theme["codex"]), x + 22
     return (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {w} {H}" width="{w}" height="{H}" role="img" '
             f'aria-label="{label}"><title>{label}</title>'
-            "<!-- Silkscreen by Jason Kottke, SIL Open Font License 1.1. Generated by scripts/build_headings.py. -->"
-            f'<path transform="translate(12 {fmt(TEXT_Y + 2.5 * PX)}) scale(1.9)" fill="{theme["accent"]}" d="{ASTERISK}"/>'
-            f'<g shape-rendering="crispEdges"><path fill="{theme["ink"]}" d="{pixel_path(name, TEXT_X, TEXT_Y, PX, track=0)}"/>'
-            f'<g fill="{theme["ink"]}">{dots}</g></g></svg>')
+            "<!-- Silkscreen by Jason Kottke, SIL Open Font License 1.1. Clawd and the Codex mark are fan art. "
+            "Generated by scripts/build_headings.py. -->"
+            f'<g shape-rendering="crispEdges">{icon(ICONS[name], TEXT_Y + (10 - len(ICONS[name])) * ICON_PX // 2, theme)}'
+            f'<path fill="{theme["ink"]}" d="{pixel_path(title, TEXT_X, TEXT_Y, PX, track=0)}"/>'
+            f'<g fill="{theme["ink"]}">{dots}</g></g>{figure}</svg>')
 
 
 def main():
-    for name, label in HEADINGS.items():
+    for name, (label, who) in HEADINGS.items():
         for mode, theme in PAGE.items():
-            (OUT_DIR / f"h-{name}-{mode}.svg").write_text(heading(label, theme), encoding="utf-8")
+            (OUT_DIR / f"h-{name}-{mode}.svg").write_text(heading(name, label, who, theme), encoding="utf-8")
     # The third button, in the X button's style, for Connect.
     from build_hero import BTN_BORDER, BTN_CREAM, BTN_WINDOW
     (OUT_DIR / "btn-github.svg").write_text(

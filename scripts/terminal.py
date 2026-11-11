@@ -41,8 +41,8 @@ TRAFFIC = ("#FF605C", "#FFBD44", "#00CA4E")
 # Outside a window, on GitHub's own page colour: ink and accent for each of
 # its themes. The dark pair is the window's own.
 PAGE = {
-    "dark": {"ink": CREAM, "accent": CLAUDE},
-    "light": {"ink": "#1F1E1D", "accent": "#C8643F"},
+    "dark": {"ink": CREAM, "accent": CLAUDE, "codex": CODEX, "outline": TEXT},
+    "light": {"ink": "#1F1E1D", "accent": "#C8643F", "codex": "#2F7DDB", "outline": "#66666B"},
 }
 
 
@@ -103,6 +103,32 @@ ASTERISK = SPINNER[4]          # ✻, Claude Code's mark
 def mark(x, y, scale, fill=CLAUDE):
     """A still ✻ centred on (x, y)."""
     return f'<path transform="translate({fmt(x)} {fmt(y)}) scale({fmt(scale)})" fill="{fill}" d="{ASTERISK}"/>'
+
+
+# === The two characters, flat ================================================================
+# Clawd and the Codex mark from the front, at badge size, where ASCII art
+# cannot be read. The measurements are the hero's models' own
+# (scripts/build_agents.py: Clawd.parts, Clawd.eyes, Codex.sdf), in model units.
+
+CLAWD_W, CLAWD_H = 17, 10
+CODEX_D = 2 * (7.25 + 0.665)
+
+
+def clawd_flat(x, y, u, fill):
+    """Clawd with its top-left corner at (x, y), `u` px a model unit. The eyes are holes."""
+    def box(bx, by, w, h):
+        return f"M{fmt(x + bx * u)} {fmt(y + by * u)}h{fmt(w * u)}v{fmt(h * u)}h{fmt(-w * u)}z"
+    d = (box(2, 0, 13, 8) + box(0, 4, 2, 2) + box(15, 4, 2, 2)              # body, arms
+         + "".join(box(lx, 8, 1, 2) for lx in (2, 4, 12, 14))               # legs
+         + box(4, 2, 1, 2) + box(12, 2, 1, 2))                              # eyes
+    return f'<path fill="{fill}" fill-rule="evenodd" d="{d}"/>'
+
+
+def codex_flat(cx, cy, u, stroke):
+    """The Codex mark centred on (cx, cy): its ring, `>` and `_`."""
+    return (f'<g transform="translate({fmt(cx)} {fmt(cy)}) scale({fmt(u)})" fill="none" stroke="{stroke}" '
+            'stroke-width="1.33" stroke-linecap="round" stroke-linejoin="round"><circle r="7.25"/>'
+            '<path d="M-2.917 -2.083L-1.77 0L-2.917 2.083M.833 2.083H3.333"/></g>')
 
 
 # === Window ================================================================================
