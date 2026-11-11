@@ -1,17 +1,20 @@
 #!/usr/bin/env python3
-"""Generate the Tech stack badges, one per tool, each in its own brand's colours.
+"""Generate the Tech stack tiles, one per tool, each in its own brand's colours.
 
     python3 scripts/build_stack.py
 
 Writes assets/stack/<name>.svg. Needs numpy, through build_hero.py.
 
-A badge is the hero's block button at badge size: a flat block with a hard
-offset shadow, the tool's logo, and its name in Silkscreen. What changes from
-one to the next is the brand: the block takes the brand's colour, the logo its
-real colours where it has more than one (Vue's green on slate, vLLM's yellow
-and blue, Chroma's three circles, AWS's orange smile), and the shadow is the
-block's colour, darkened. Claude Code's logo is Clawd and Codex's is the Codex
-mark, both as the hero draws them.
+A tile is the hero's block button made square: a flat block with a hard offset
+shadow and, on it, the tool's logo, large. The logo says what the tool is, so
+there is no name on the tile; README.md gives each image its name as alt text
+and as a title, which shows on hover. What changes from one tile to the next
+is the brand: the block takes the brand's colour, the logo its real colours
+where it has more than one (Vue's green on slate, vLLM's yellow and navy,
+Chroma's three circles, AWS's orange smile), and the shadow is the block's
+colour, darkened. Claude Code's logo is Clawd and Codex's is the Codex mark,
+both as the hero draws them. RAG has no logo, so its tile is a pixel
+magnifying glass over its three letters.
 
 Logos are Simple Icons' paths (CC0), kept in scripts/data/logos.json so a
 build needs no network. To add one, copy the `d` of
@@ -31,28 +34,11 @@ from build_hero import BTN_BG, BTN_BORDER, BTN_CREAM, CLAY, OUT_DIR, pixel_path,
 LOGOS = json.loads((Path(__file__).resolve().parent / "data" / "logos.json").read_text())
 STACK_DIR = OUT_DIR / "stack"
 
-H, SHADOW = 30, 3              # the block, and how far its shadow is offset
-PX = 2                         # px a pixel of the name: capitals 10 px tall
-LOGO = 16                      # px the logo's 24-unit box is drawn at
-PAD_L, GAP, PAD_R = 9, 8, 11
+SIDE, SHADOW = 48, 4           # the block, and how far its shadow is offset
+LOGO = 28                      # px the logo's 24-unit box is drawn at
+PX = 2                         # px a pixel of RAG's letters
 
 WHITE, BLACK = "#FFFFFF", "#000000"
-
-
-def simple(slug, fill):
-    return f'<path fill="{fill}" d="{LOGOS[slug]}"/>'
-
-
-def vllm_logo():
-    right, left = LOGOS["vllm"].split("M", 1)
-    return f'<path fill="#0A2540" d="{right}"/><path fill="#FDB515" d="M{left}"/>'
-
-
-def aws_logo():
-    # The letters in white, the smile under them in AWS's orange.
-    d = LOGOS["amazonwebservices"]
-    return (f'<clipPath id="s"><rect y="13.6" width="24" height="10.4"/></clipPath>'
-            f'<path fill="{WHITE}" d="{d}"/><path fill="#FF9900" clip-path="url(#s)" d="{d}"/>')
 
 
 CHROMA = ('<circle cx="15.92" cy="12" r="7.6" fill="#FFDE2D"/><circle cx="8.08" cy="12" r="7.6" fill="#327EFF"/>'
@@ -62,44 +48,67 @@ CHROMA = ('<circle cx="15.92" cy="12" r="7.6" fill="#FFDE2D"/><circle cx="8.08" 
 SEARCH = (".####.../#....#../#....#../#....#../#....#../.####.../.....##./......##")
 
 
-def pixels(bitmap, fill, size=24):
-    rows = bitmap.split("/")
-    u = size / len(rows)
-    d = "".join(f"M{fmt(c * u)} {fmt(r * u)}h{fmt(u)}v{fmt(u)}h{fmt(-u)}z"
-                for r, row in enumerate(rows) for c, ch in enumerate(row) if ch == "#")
-    return f'<path fill="{fill}" shape-rendering="crispEdges" d="{d}"/>'
+def boxed(logo):
+    """A logo drawn in a 24-unit box, centred on the tile."""
+    return f'<g transform="translate({(SIDE - LOGO) / 2:g} {(SIDE - LOGO) / 2:g}) scale({fmt(LOGO / 24)})">{logo}</g>'
+
+
+def simple(slug, fill):
+    return boxed(f'<path fill="{fill}" d="{LOGOS[slug]}"/>')
+
+
+def vllm_logo():
+    right, left = LOGOS["vllm"].split("M", 1)
+    return boxed(f'<path fill="#0A2540" d="{right}"/><path fill="#FDB515" d="M{left}"/>')
+
+
+def aws_logo():
+    # The letters in white, the smile under them in AWS's orange.
+    d = LOGOS["amazonwebservices"]
+    return boxed(f'<clipPath id="s"><rect y="13.6" width="24" height="10.4"/></clipPath>'
+                 f'<path fill="{WHITE}" d="{d}"/><path fill="#FF9900" clip-path="url(#s)" d="{d}"/>')
 
 
 def clawd_logo():
-    u = 24 / CLAWD_W
-    return clawd_flat(0, (24 - CLAWD_H * u) / 2, u, CLAY)
+    u = 2                          # whole pixels: 34 x 20
+    return clawd_flat((SIDE - CLAWD_W * u) / 2, (SIDE - CLAWD_H * u) / 2, u, CLAY)
 
 
-# (file, name, block, ink, logo in a 24-unit box, border)
-BADGES = [
-    ("langgraph", "LangGraph", "#1C3C3C", WHITE, simple("langgraph", WHITE), None),
-    ("langchain", "LangChain", "#1C3C3C", WHITE, simple("langchain", WHITE), None),
-    ("claude-api", "Claude API", CLAY, BTN_BG, simple("claude", BTN_BG), None),
-    ("openai-api", "OpenAI API", BLACK, WHITE, simple("openai", WHITE), BTN_BORDER),
-    ("ollama", "Ollama", WHITE, BLACK, simple("ollama", BLACK), BLACK),
-    ("vllm", "vLLM", "#30A2FF", "#0A2540", vllm_logo(), None),
-    ("rag", "RAG", "#262624", BTN_CREAM, pixels(SEARCH, CLAY), BTN_BORDER),
-    ("python", "Python", "#3776AB", WHITE, simple("python", "#FFD43B"), None),
-    ("typescript", "TypeScript", "#3178C6", WHITE, simple("typescript", WHITE), None),
-    ("javascript", "JavaScript", "#F7DF1E", BLACK, simple("javascript", BLACK), None),
-    ("fastapi", "FastAPI", "#009688", WHITE, simple("fastapi", WHITE), None),
-    ("vue", "Vue.js", "#35495E", WHITE, simple("vuedotjs", "#41B883"), None),
-    ("postgresql", "PostgreSQL", "#336791", WHITE, simple("postgresql", WHITE), None),
-    ("sqlite", "SQLite", "#003B57", WHITE, simple("sqlite", "#7CC4F0"), None),
-    ("chromadb", "ChromaDB", "#FAFAF9", BLACK, CHROMA, BLACK),
-    ("qdrant", "Qdrant", "#DC244C", WHITE, simple("qdrant", WHITE), None),
-    ("docker", "Docker", "#1D63ED", WHITE, simple("docker", WHITE), None),
-    ("aws", "AWS", "#232F3E", WHITE, aws_logo(), None),
-    ("git", "Git", "#F05032", WHITE, simple("git", WHITE), None),
-    ("github", "GitHub", "#181717", WHITE, simple("github", WHITE), BTN_BORDER),
-    ("linux", "Linux", "#FCC624", BLACK, simple("linux", BLACK), None),
-    ("claude-code", "Claude Code", BTN_CREAM, BTN_BG, clawd_logo(), None),
-    ("codex", "Codex", "#0F0F11", WHITE, codex_flat(12, 12, 24 / 17.2, CODEX), BTN_BORDER),
+def rag_logo():
+    u, rows = 3, SEARCH.split("/")
+    x0, y0 = (SIDE - 8 * u) // 2, 5
+    glass = "".join(f"M{x0 + c * u} {y0 + r * u}h{u}v{u}h{-u}z"
+                    for r, row in enumerate(rows) for c, ch in enumerate(row) if ch == "#")
+    letters = pixel_path("RAG", round((SIDE - text_width("RAG", PX)) / 2), y0 + 8 * u + 4, PX)
+    return (f'<g shape-rendering="crispEdges"><path fill="{CLAY}" d="{glass}"/>'
+            f'<path fill="{BTN_CREAM}" d="{letters}"/></g>')
+
+
+# (file, name, block, logo, border)
+TILES = [
+    ("langgraph", "LangGraph", "#1C3C3C", simple("langgraph", WHITE), None),
+    ("langchain", "LangChain", "#1C3C3C", simple("langchain", WHITE), None),
+    ("claude-api", "Claude API", CLAY, simple("claude", BTN_BG), None),
+    ("openai-api", "OpenAI API", BLACK, simple("openai", WHITE), BTN_BORDER),
+    ("ollama", "Ollama", WHITE, simple("ollama", BLACK), BLACK),
+    ("vllm", "vLLM", "#30A2FF", vllm_logo(), None),
+    ("rag", "RAG", "#262624", rag_logo(), BTN_BORDER),
+    ("python", "Python", "#3776AB", simple("python", "#FFD43B"), None),
+    ("typescript", "TypeScript", "#3178C6", simple("typescript", WHITE), None),
+    ("javascript", "JavaScript", "#F7DF1E", simple("javascript", BLACK), None),
+    ("fastapi", "FastAPI", "#009688", simple("fastapi", WHITE), None),
+    ("vue", "Vue.js", "#35495E", simple("vuedotjs", "#41B883"), None),
+    ("postgresql", "PostgreSQL", "#336791", simple("postgresql", WHITE), None),
+    ("sqlite", "SQLite", "#003B57", simple("sqlite", "#7CC4F0"), None),
+    ("chromadb", "ChromaDB", "#FAFAF9", boxed(CHROMA), BLACK),
+    ("qdrant", "Qdrant", "#DC244C", simple("qdrant", WHITE), None),
+    ("docker", "Docker", "#1D63ED", simple("docker", WHITE), None),
+    ("aws", "AWS", "#232F3E", aws_logo(), None),
+    ("git", "Git", "#F05032", simple("git", WHITE), None),
+    ("github", "GitHub", "#181717", simple("github", WHITE), BTN_BORDER),
+    ("linux", "Linux", "#FCC624", simple("linux", BLACK), None),
+    ("claude-code", "Claude Code", BTN_CREAM, clawd_logo(), None),
+    ("codex", "Codex", "#0F0F11", codex_flat(SIDE / 2, SIDE / 2, 30 / 17.2, CODEX), BTN_BORDER),
 ]
 
 
@@ -108,25 +117,21 @@ def darker(colour, keep=0.5):
     return "#{:02X}{:02X}{:02X}".format(*(round(c * keep) for c in (r, g, b)))
 
 
-def badge(name, block, ink, logo, border):
-    label = name.upper()
-    text_x = PAD_L + LOGO + GAP
-    w = round(text_x + text_width(label, PX) + PAD_R)
-    edge = (f'<rect x="1" y="1" width="{w - 2}" height="{H - 2}" fill="none" stroke="{border}" stroke-width="2"/>'
+def tile(name, block, logo, border):
+    edge = (f'<rect x="1" y="1" width="{SIDE - 2}" height="{SIDE - 2}" fill="none" stroke="{border}" stroke-width="2"/>'
             if border else "")
-    return (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {w + SHADOW} {H + SHADOW}" width="{w + SHADOW}" '
-            f'height="{H + SHADOW}" role="img" aria-label="{name}"><title>{name}</title>'
-            f'<rect x="{SHADOW}" y="{SHADOW}" width="{w}" height="{H}" fill="{darker(block)}"/>'
-            f'<rect width="{w}" height="{H}" fill="{block}"/>{edge}'
-            f'<g transform="translate({PAD_L} {(H - LOGO) / 2:g}) scale({fmt(LOGO / 24)})">{logo}</g>'
-            f'<path fill="{ink}" shape-rendering="crispEdges" d="{pixel_path(label, text_x, (H - 5 * PX) // 2, PX)}"/></svg>')
+    full = SIDE + SHADOW
+    return (f'<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 {full} {full}" width="{full}" height="{full}" '
+            f'role="img" aria-label="{name}"><title>{name}</title>'
+            f'<rect x="{SHADOW}" y="{SHADOW}" width="{SIDE}" height="{SIDE}" fill="{darker(block)}"/>'
+            f'<rect width="{SIDE}" height="{SIDE}" fill="{block}"/>{edge}{logo}</svg>')
 
 
 def main():
     STACK_DIR.mkdir(parents=True, exist_ok=True)
-    for file, name, block, ink, logo, border in BADGES:
-        (STACK_DIR / f"{file}.svg").write_text(badge(name, block, ink, logo, border), encoding="utf-8")
-    print(f"{len(BADGES)} badges in {STACK_DIR.relative_to(OUT_DIR.parent)}")
+    for file, name, block, logo, border in TILES:
+        (STACK_DIR / f"{file}.svg").write_text(tile(name, block, logo, border), encoding="utf-8")
+    print(f"{len(TILES)} tiles in {STACK_DIR.relative_to(OUT_DIR.parent)}")
 
 
 if __name__ == "__main__":

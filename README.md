@@ -31,41 +31,41 @@
 
 #### AI / LLM
 
-![LangGraph](./assets/stack/langgraph.svg)
-![LangChain](./assets/stack/langchain.svg)
-![Claude API](./assets/stack/claude-api.svg)
-![OpenAI API](./assets/stack/openai-api.svg)
-![Ollama](./assets/stack/ollama.svg)
-![vLLM](./assets/stack/vllm.svg)
-![RAG](./assets/stack/rag.svg)
+![LangGraph](./assets/stack/langgraph.svg "LangGraph")
+![LangChain](./assets/stack/langchain.svg "LangChain")
+![Claude API](./assets/stack/claude-api.svg "Claude API")
+![OpenAI API](./assets/stack/openai-api.svg "OpenAI API")
+![Ollama](./assets/stack/ollama.svg "Ollama")
+![vLLM](./assets/stack/vllm.svg "vLLM")
+![RAG](./assets/stack/rag.svg "RAG")
 
 #### Languages
 
-![Python](./assets/stack/python.svg)
-![TypeScript](./assets/stack/typescript.svg)
-![JavaScript](./assets/stack/javascript.svg)
+![Python](./assets/stack/python.svg "Python")
+![TypeScript](./assets/stack/typescript.svg "TypeScript")
+![JavaScript](./assets/stack/javascript.svg "JavaScript")
 
 #### Backend / Frontend
 
-![FastAPI](./assets/stack/fastapi.svg)
-![Vue.js](./assets/stack/vue.svg)
+![FastAPI](./assets/stack/fastapi.svg "FastAPI")
+![Vue.js](./assets/stack/vue.svg "Vue.js")
 
 #### Databases
 
-![PostgreSQL](./assets/stack/postgresql.svg)
-![SQLite](./assets/stack/sqlite.svg)
-![ChromaDB](./assets/stack/chromadb.svg)
-![Qdrant](./assets/stack/qdrant.svg)
+![PostgreSQL](./assets/stack/postgresql.svg "PostgreSQL")
+![SQLite](./assets/stack/sqlite.svg "SQLite")
+![ChromaDB](./assets/stack/chromadb.svg "ChromaDB")
+![Qdrant](./assets/stack/qdrant.svg "Qdrant")
 
 #### Infrastructure / Tools
 
-![Docker](./assets/stack/docker.svg)
-![AWS](./assets/stack/aws.svg)
-![Git](./assets/stack/git.svg)
-![GitHub](./assets/stack/github.svg)
-![Linux](./assets/stack/linux.svg)
-![Claude Code](./assets/stack/claude-code.svg)
-![Codex](./assets/stack/codex.svg)
+![Docker](./assets/stack/docker.svg "Docker")
+![AWS](./assets/stack/aws.svg "AWS")
+![Git](./assets/stack/git.svg "Git")
+![GitHub](./assets/stack/github.svg "GitHub")
+![Linux](./assets/stack/linux.svg "Linux")
+![Claude Code](./assets/stack/claude-code.svg "Claude Code")
+![Codex](./assets/stack/codex.svg "Codex")
 
 <h3><picture><source media="(prefers-color-scheme: dark)" srcset="./assets/h-activity-dark.svg"><img src="./assets/h-activity-light.svg" alt="Activity"></picture></h3>
 
